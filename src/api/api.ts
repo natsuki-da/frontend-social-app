@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
+//const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
+const API_BASE_URL = "https://rapid-dorthea-antonstest-9c800e7b.koyeb.app";
 
 const api: AxiosInstance = axios.create({
     baseURL : API_BASE_URL,
@@ -12,7 +13,7 @@ const api: AxiosInstance = axios.create({
 
 api.interceptors.request.use(
     (config) => {
-        const token : string | null = localStorage.getItem("jwt");
+        const token : string | null = localStorage.getItem("token");
         if(token && config.headers){
             config.headers["Authorization"] = `Bearer ${token}`;
         }
