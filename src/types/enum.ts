@@ -11,4 +11,26 @@ export interface AuthContextType {
     role: "ADMIN" | "USER" | null;
     login: (username: string, password: string) => Promise<void>;
     logout: () => void;
+  };
+
+export interface Post {
+    id: number;
+    text: string;
+    created: string;
+    user?: {
+      id: number;
+      username: string;
+    };
   }
+
+  export interface PostContent {
+    id: number;
+    text: string;
+    created: string;
+    username: string;
+    displayName: string;
+  }
+
+  export interface PostResponse {
+    content: PostContent[];
+  }  
