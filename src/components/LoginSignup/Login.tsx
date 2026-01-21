@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import * as S from "./Login.styles"
 import { useNavigate } from "react-router-dom";
-import { Paths, SignupFormProps } from "../../types/enum";
+import { LoginProps, Paths, } from "../../types/enum";
 import { useAuth } from "../../context/useAuth";
 
-const Login = ({ onSwitchToSignup }: SignupFormProps) => {
+const Login = ({ onSwitchToSignup }: LoginProps) => {
   const [username, setUsername] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [error, setError] = useState<string | null>(null);

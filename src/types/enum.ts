@@ -48,10 +48,10 @@ export interface DefaultUser {
   profileImagePath: string;
 }
 
-export interface LoginFormProps {
-  onSwitchToLogin: () => void;
+export interface LoginProps {
+  onSwitchToSignup: () => void;
 }
 
-export interface SignupFormProps {
-  onSwitchToSignup: () => void;
+export interface SignupProps {
+  onSwitchToLogin: () => void;
 }

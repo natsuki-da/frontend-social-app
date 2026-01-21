@@ -7,7 +7,7 @@ const LoginSignup = () => {
     const [mode, setMode] = useState<"login" | "signup">("login");
     return (
         <S.Container>
-            <h1>{mode === "login" ? "ログイン" : "新規登録"}</h1>
+            <h1>{mode === "login" ? "login" : "signup"}</h1>
 
             {mode === "login" ? (
                 <Login onSwitchToSignup={() => setMode("signup")} />

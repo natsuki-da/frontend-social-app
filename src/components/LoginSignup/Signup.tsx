@@ -1,13 +1,15 @@
 import { useState } from "react";
 import * as S from "./Login.styles"
 import api from "../../api/api";
-import { DefaultUser, LoginFormProps } from "../../types/enum";
+import { DefaultUser, Paths, SignupProps } from "../../types/enum";
+import { useNavigate } from "react-router-dom";
 
-const Signup = ({ onSwitchToLogin }: LoginFormProps) => {
+const Signup = ({ onSwitchToLogin }: SignupProps) => {
     const [username, setUsername] = useState<string>("");
     const [email, setEmail] = useState<string>("");
     const [password, setPassword] = useState<string>("");
     const [error, setError] = useState<string | null>(null);
+    const navigate = useNavigate();
 
     const handleSignup = async (e: { preventDefault: () => void; }) => {
         e.preventDefault();
@@ -22,9 +24,13 @@ const Signup = ({ onSwitchToLogin }: LoginFormProps) => {
             bio: "Hej! Jag är ny här :)",
             profileImagePath: ""
         };
+        
 
         try {
-            await api.post("/users", userInfo);
+            const response = await api.post("/users", userInfo);
+            if (response.data.username && response.data.email) {
+                navigate(Paths.FEED);
+            }
             // const resToken = await api.post("/request-token", {username, password});
             // const token = response.data.token;
             // localStorage.setItem("jwt", token);
@@ -119,11 +125,6 @@ const Signup = ({ onSwitchToLogin }: LoginFormProps) => {
                         Har du redan ett konto?{" "}
                         <button type="button" onClick={onSwitchToLogin}>
                             Logga in här
-                        </button>
-                        <br />
-                        Eller vill du byta till signup?{" "}
-                        <button type="button" onClick={onSwitchToLogin}>
-                            Sign up här
                         </button>
                     </p>
                 </S.Footer>
