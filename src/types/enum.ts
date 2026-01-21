@@ -2,12 +2,15 @@ export enum Paths {
   HOME = "/",
   SIGNUP = "/signup",
   LOGIN = "/login",
-  FEED = "/feed"
+  FEED = "/feed",
+  WALL = "/wall"
 }
+
+export const getWallPath = (userId: number) => `${Paths.WALL}/${userId}`;
 
 export interface AuthContextType {
   token: string | null;
-  userId: string | null;
+  userId: number | null;
   role: "ADMIN" | "USER" | null;
   hasAccount: boolean;
   login: (username: string, password: string) => Promise<void>;
@@ -54,4 +57,20 @@ export interface LoginProps {
 
 export interface SignupProps {
   onSwitchToLogin: () => void;
+}
+
+export interface WallPost {
+  id: number;
+  text: string;
+  createdAt: string;
+}
+
+export interface User {
+  id: number;
+  displayName: string;
+  bio: string;
+}
+
+export interface WallProps {
+  viewedUserId?: number;
 }

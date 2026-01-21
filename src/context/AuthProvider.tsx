@@ -8,7 +8,10 @@ interface AuthProviderProps {
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
     const [token, setToken] = useState(localStorage.getItem("token"));
-    const [userId, setUserId] = useState(localStorage.getItem("userId"));
+    const [userId, setUserId] = useState<number | null>(() => {
+        const stored = localStorage.getItem("userId");
+        return stored ? Number(stored) : null;
+    });
     const [role, setRole] = useState<"ADMIN" | "USER" | null>(() => {
         const storedRole = localStorage.getItem("role");
         return storedRole === "ADMIN" || storedRole === "USER" ? storedRole : null;
@@ -19,11 +22,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         try{
             const response = await api.post("/request-token", {username, password});
             const token = response.data.token;
-            const userId = response.data.userId;
+            const userId = Number(response.data.userId);
             const userRole = response.data.userRole;
             console.log(response.data);
             localStorage.setItem("token", token);
-            localStorage.setItem("userId", userId);
+            localStorage.setItem("userId", String(userId));
             localStorage.setItem("userRole", userRole)
             setToken(token);
             setUserId(userId);
