@@ -13,7 +13,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         const storedRole = localStorage.getItem("role");
         return storedRole === "ADMIN" || storedRole === "USER" ? storedRole : null;
       });
-    
+      const [hasAccount, setHasAccount] = useState<boolean>(false);
+
     const login = async (username: string, password: string) => {
         try{
             const response = await api.post("/request-token", {username, password});
@@ -40,8 +41,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         localStorage.removeItem("userId");
     };
 
+    const checkHasAccount = () => {
+        setHasAccount(true);
+    };
+
     return (
-        <AuthContext.Provider value={{token, userId, role, login, logout}}>
+        <AuthContext.Provider value={{token, userId, role, hasAccount, login, logout, checkHasAccount}}>
             {children}
         </AuthContext.Provider>
     )

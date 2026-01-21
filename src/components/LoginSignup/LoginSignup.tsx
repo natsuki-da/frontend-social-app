@@ -1,36 +1,20 @@
 import { useState } from "react";
 import * as S from "./LoginSignup.styles"
+import Login from "./Login";
+import Signup from "./Signup";
 
 const LoginSignup = () => {
-    const [] = useState();
+    const [mode, setMode] = useState<"login" | "signup">("login");
     return (
         <S.Container>
-            <S.Form>
-                <S.Header>
-                    <h1>Login</h1>
-                    <S.Line />
-                </S.Header>
-                <S.Main>
-                    <S.FormField>
-                        <S.Label>Username</S.Label>
-                        <S.Input type="text" placeholder="username" />
-                    </S.FormField>
-                    <S.FormField>
-                        <S.Label>E-mail</S.Label>
-                        <S.Input type="mail" placeholder="e-mail" />
-                    </S.FormField>
-                    <S.FormField>
-                        <S.Label>Password</S.Label>
-                        <S.Input type="password" placeholder="password" />
-                    </S.FormField>
-                </S.Main>
-                
-                <S.Footer>
-                    <S.LoginButton>Login</S.LoginButton>
-                    <S.SignupButton>Signup</S.SignupButton>
-                </S.Footer>
-            </S.Form>
-        </S.Container>
+            <h1>{mode === "login" ? "ログイン" : "新規登録"}</h1>
+
+            {mode === "login" ? (
+                <Login onSwitchToSignup={() => setMode("signup")} />
+            ) : (
+                <Signup onSwitchToLogin={() => setMode("login")} />
+            )}
+        </S.Container >
     )
 }
 

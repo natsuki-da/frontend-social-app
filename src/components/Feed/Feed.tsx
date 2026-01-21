@@ -17,7 +17,7 @@ const Feed = () => {
     console.log("token:", token);
     console.log("userId:", userId);
 
-    const getPosts = async () => {
+    const getAllPosts = async () => {
       if (!token || !userId) {
         setLoading(false);
         return;
@@ -38,7 +38,7 @@ const Feed = () => {
       }
     };
 
-    getPosts();
+    getAllPosts();
   }, [token, userId]);
 
   if (loading) {
@@ -67,15 +67,14 @@ const Feed = () => {
               <small className="post-date">
                 {new Date(post.created).toLocaleString()}
               </small>
-            </li>
-            {
-              post.userId === userId && (
-                <div>
+
+              {post.userId === userId && (
+                <div className="post-actions">
                   <button>Redigera</button>
                   <button>Ta bort</button>
                 </div>
-              )
-            }
+              )}
+            </li>
           ))}
         </ul>
       </div>
