@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import * as S from "./Login.styles"
 import { useNavigate } from "react-router-dom";
-import { Paths } from "../../types/enum";
+import { LoginProps, Paths, } from "../../types/enum";
 import { useAuth } from "../../context/useAuth";
 
-const Login = () => {
+const Login = ({ onSwitchToSignup }: LoginProps) => {
   const [username, setUsername] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +52,12 @@ const Login = () => {
 
         <S.Footer>
           <S.LoginButton>Log in</S.LoginButton>
+          <p style={{ marginTop: "1rem", textAlign: "center" }}>
+            Har du inget konto?{" "}
+            <button type="button" onClick={onSwitchToSignup}>
+              Registrera dig här
+            </button>
+          </p>
         </S.Footer>
 
         {error && <p style={{ color: "red" }}>{error}</p>}
