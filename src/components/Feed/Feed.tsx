@@ -58,7 +58,7 @@ const Feed = () => {
         <ul className="post-list">
           {posts.map((post) => (
             <li key={post.id} className="post-card">
-              <Link to={`/users/${post.userId}`}>
+              <Link to={`/wall/${post.userId}`}>
                 {post.username}
               </Link>
               <p>{post.username}</p>

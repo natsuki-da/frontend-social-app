@@ -32,7 +32,7 @@ export interface PostContent {
   id: number;
   text: string;
   created: string;
-  userId: string;
+  userId: number;
   username: string;
   displayName: string;
 }
