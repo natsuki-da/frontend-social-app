@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
-import { useAuth } from "../../context/useAuth";
+import {useEffect, useState} from "react";
+import {useAuth} from "../../context/useAuth";
 import api from "../../api/api";
-import { User, WallPost, WallProps } from "../../types/enum";
+import {User, WallPost, WallProps} from "../../types/enum";
 
-const Wall = ({ viewedUserId }: WallProps) => {
-    const { token, userId: loggedInUserId } = useAuth();
+const Wall = ({viewedUserId}: WallProps) => {
+    const {token, userId: loggedInUserId} = useAuth();
 
     const [posts, setPosts] = useState<WallPost[]>([]);
     const [user, setUser] = useState<User | null>(null);
@@ -22,21 +22,21 @@ const Wall = ({ viewedUserId }: WallProps) => {
             setLoading(false);
             return;
         }
-    
+
         try {
             const response = await api.get("/posts");
             const data = response.data;
-    
+
             const filteredPosts = data.content.filter(
                 (post: any) => post.userId === targetUserId
             );
-    
+
             const sortedPosts = filteredPosts.sort(
                 (a: any, b: any) => new Date(b.created).getTime() - new Date(a.created).getTime()
             );
-    
+
             setPosts(sortedPosts);
-    
+
             if (sortedPosts.length > 0) {
                 setUser({
                     id: sortedPosts[0].userId,
@@ -50,7 +50,7 @@ const Wall = ({ viewedUserId }: WallProps) => {
                     bio: "",
                 });
             }
-    
+
         } catch (error) {
             console.error(error);
         } finally {
@@ -66,8 +66,9 @@ const Wall = ({ viewedUserId }: WallProps) => {
         if (!newPostText.trim()) return;
 
         try {
-            await api.post(`/users/${loggedInUserId}/posts`, {
+            await api.post(`/users/posts`, {
                 text: newPostText,
+                created: new Date().toISOString(),
             });
             setNewPostText("");
             await fetchPosts();
@@ -80,7 +81,11 @@ const Wall = ({ viewedUserId }: WallProps) => {
         if (!editingText.trim()) return;
 
         try {
-            await api.put(`/posts/${postId}`, { text: editingText });
+            await api.put(`/posts/${postId}`,
+                {
+                    text: editingText,
+                    created: new Date().toISOString()
+                });
             setEditingPostId(null);
             setEditingText("");
             await fetchPosts();
@@ -138,9 +143,9 @@ const Wall = ({ viewedUserId }: WallProps) => {
                         ) : (
                             <>
                                 <p className="post-text">{post.text}</p>
-                                <hr />
+                                <hr/>
                                 <small className="post-date">
-                                    {new Date(post.createdAt).toLocaleString()} av {user.displayName}
+                                    {new Date(post.created).toLocaleString()} av {user.displayName}
                                 </small>
 
                                 {isOwnWall && (

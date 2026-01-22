@@ -1,10 +1,10 @@
-import { useState } from "react";
+import {useState} from "react";
 import * as S from "./Login.styles"
 import api from "../../api/api";
-import { DefaultUser, Paths, SignupProps } from "../../types/enum";
-import { useNavigate } from "react-router-dom";
+import {DefaultUser, Paths} from "../../types/enum";
+import {useNavigate} from "react-router-dom";
 
-const Signup = ({ onSwitchToLogin }: SignupProps) => {
+const Signup = () => {
     const [username, setUsername] = useState<string>("");
     const [email, setEmail] = useState<string>("");
     const [password, setPassword] = useState<string>("");
@@ -24,7 +24,7 @@ const Signup = ({ onSwitchToLogin }: SignupProps) => {
             bio: "Hej! Jag är ny här :)",
             profileImagePath: ""
         };
-        
+
 
         try {
             const response = await api.post("/users", userInfo);
@@ -82,7 +82,7 @@ const Signup = ({ onSwitchToLogin }: SignupProps) => {
             <S.Form onSubmit={(handleSignup)}>
                 <S.Header>
                     <h1>Sign up</h1>
-                    <S.Line />
+                    <S.Line/>
                 </S.Header>
                 <S.Main>
                     <S.FormField>
@@ -121,9 +121,9 @@ const Signup = ({ onSwitchToLogin }: SignupProps) => {
                 </S.Main>
                 <S.Footer>
                     <S.SignupButton>Sign up</S.SignupButton>
-                    <p style={{ marginTop: "1rem", textAlign: "center" }}>
+                    <p style={{marginTop: "1rem", textAlign: "center"}}>
                         Har du redan ett konto?{" "}
-                        <button type="button" onClick={onSwitchToLogin}>
+                        <button type="button" onClick={() => navigate(Paths.LOGIN)}>
                             Logga in här
                         </button>
                     </p>
