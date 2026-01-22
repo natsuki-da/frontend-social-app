@@ -63,7 +63,6 @@ const Feed = () => {
                             <Link to={`/wall/${post.userId}`}>
                                 {post.username}
                             </Link>
-                            <p>{post.username}</p>
                             <p className="post-text">{post.text}</p>
                             <hr/>
                             <small className="post-date">
