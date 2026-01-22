@@ -65,8 +65,10 @@ export interface SignupProps {
 
 export interface WallPost {
     id: number;
+    userId: number;
     text: string;
     created: string;
+    displayName: string;
 }
 
 export interface User {

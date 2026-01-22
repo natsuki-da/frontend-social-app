@@ -13,6 +13,9 @@ const Wall = ({viewedUserId}: WallProps) => {
     const [editingPostId, setEditingPostId] = useState<number | null>(null);
     const [editingText, setEditingText] = useState("");
 
+    const [page, setPage] = useState(0);
+    const [totalPages, setTotalPages] = useState(1);
+
     const isOwnWall = !viewedUserId || viewedUserId === loggedInUserId;
     const targetUserId = viewedUserId || loggedInUserId;
 
@@ -23,27 +26,30 @@ const Wall = ({viewedUserId}: WallProps) => {
             return;
         }
 
+        setLoading(true);
         try {
-            const response = await api.get("/posts");
+            const response = await api.get(`/posts/me?page=${page}&size=10`);
             const data = response.data;
 
-            const filteredPosts = data.content.filter(
-                (post: any) => post.userId === targetUserId
+            const filteredPosts: WallPost[] = data.content.filter(
+                (post: WallPost) => post.userId === targetUserId
             );
 
             const sortedPosts = filteredPosts.sort(
-                (a: any, b: any) => new Date(b.created).getTime() - new Date(a.created).getTime()
+                (a, b) => new Date(b.created).getTime() - new Date(a.created).getTime()
             );
 
-            setPosts(sortedPosts);
+            setPosts(data.content);
 
-            if (sortedPosts.length > 0) {
+            setTotalPages(data.totalPages || 1);
+
+            if (data.content.length > 0) {
                 setUser({
                     id: sortedPosts[0].userId,
-                    displayName: sortedPosts[0].displayName,
+                    displayName: sortedPosts[0].displayName || "",
                     bio: "",
                 });
-            } else if (isOwnWall) {
+            } else {
                 setUser({
                     id: Number(loggedInUserId),
                     displayName: "",
@@ -60,7 +66,7 @@ const Wall = ({viewedUserId}: WallProps) => {
 
     useEffect(() => {
         fetchPosts();
-    }, [token, targetUserId]);
+    }, [token, targetUserId, page]);
 
     const handleCreatePost = async () => {
         if (!newPostText.trim()) return;
@@ -161,6 +167,20 @@ const Wall = ({viewedUserId}: WallProps) => {
                     </li>
                 ))}
             </ul>
+            <div className="pagination">
+                <button disabled={page === 0} onClick={() => setPage(page - 1)}>
+                    Föregående
+                </button>
+                <span>
+          Sida {page + 1} av {totalPages}
+        </span>
+                <button
+                    disabled={page + 1 >= totalPages}
+                    onClick={() => setPage(page + 1)}
+                >
+                    Nästa
+                </button>
+            </div>
         </div>
     );
 };
