@@ -140,7 +140,7 @@ const Wall = ({viewedUserId}: WallProps) => {
                                 <p className="post-text">{post.text}</p>
                                 <hr/>
                                 <small className="post-date">
-                                    {new Date(post.createdAt).toLocaleString()} av {user.displayName}
+                                    {new Date(post.created).toLocaleString()} av {user.displayName}
                                 </small>
 
                                 {isOwnWall && (
