@@ -39,6 +39,10 @@ export interface PostContent {
 
 export interface PostResponse {
     content: PostContent[];
+    totalPages: number;
+    totalElements: number;
+    size: number;
+    number: number;
 }
 
 export interface DefaultUser {
