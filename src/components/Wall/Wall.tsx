@@ -72,8 +72,9 @@ const Wall = ({viewedUserId}: WallProps) => {
         if (!newPostText.trim()) return;
 
         try {
-            await api.post(`/wall/${loggedInUserId}/posts`, {
+            await api.post(`/users/posts`, {
                 text: newPostText,
+                created: new Date().toISOString(),
             });
             setNewPostText("");
             await fetchPosts();
@@ -86,7 +87,11 @@ const Wall = ({viewedUserId}: WallProps) => {
         if (!editingText.trim()) return;
 
         try {
-            await api.put(`/posts/${postId}`, {text: editingText});
+            await api.put(`/posts/${postId}`,
+                {
+                    text: editingText,
+                    created: new Date().toISOString()
+                });
             setEditingPostId(null);
             setEditingText("");
             await fetchPosts();
