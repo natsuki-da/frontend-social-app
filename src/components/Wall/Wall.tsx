@@ -19,6 +19,9 @@ const Wall = ({viewedUserId}: WallProps) => {
     const isOwnWall = !viewedUserId || viewedUserId === loggedInUserId;
     const targetUserId = viewedUserId || loggedInUserId;
 
+    useEffect(() => {
+        setPage(0);
+    }, [targetUserId]);
 
     const fetchPosts = async () => {
         if (!token) {
@@ -27,40 +30,58 @@ const Wall = ({viewedUserId}: WallProps) => {
         }
 
         setLoading(true);
-        try {
-            const response = await api.get(`/posts/me?page=${page}&size=10`);
-            const data = response.data;
 
-            const filteredPosts: WallPost[] = data.content.filter(
-                (post: WallPost) => post.userId === targetUserId
-            );
+        if (String(loggedInUserId) === String(targetUserId)) {
+            try {
+                const response = await api.get(`/posts/me?page=${page}&size=10`);
+                const data = response.data;
 
-            const sortedPosts = filteredPosts.sort(
-                (a, b) => new Date(b.created).getTime() - new Date(a.created).getTime()
-            );
+                const filteredPosts: WallPost[] = (data.content || []).filter(
+                    (post: WallPost) => String(post.userId) === String(targetUserId)
+                );
 
-            setPosts(data.content);
+                setPosts(filteredPosts);
+                setTotalPages(data.totalPages || 1);
 
-            setTotalPages(data.totalPages || 1);
-
-            if (data.content.length > 0) {
                 setUser({
-                    id: sortedPosts[0].userId,
-                    displayName: sortedPosts[0].displayName || "",
+                    id: Number(targetUserId),
+                    displayName: filteredPosts[0]?.displayName || "",
                     bio: "",
                 });
-            } else {
+            } catch (error) {
+                console.error(error);
+            } finally {
+                setLoading(false);
+            }
+        } else {
+            try {
+                setLoading(true);
+
+                const response = await api.get(`/users/${targetUserId}/with-posts`);
+                const data = response.data;
+
+                const content: WallPost[] = data.posts || [];
+
+                setPosts(content);
+                setTotalPages(1);
+
                 setUser({
-                    id: Number(loggedInUserId),
+                    id: data.user?.id ?? Number(targetUserId),
+                    displayName: data.user?.displayName ?? data.user?.username ?? "",
+                    bio: data.user?.bio ?? "",
+                });
+            } catch (error) {
+                console.error(error);
+                setUser({
+                    id: Number(targetUserId),
                     displayName: "",
                     bio: "",
                 });
+                setPosts([]);
+                setTotalPages(1);
+            } finally {
+                setLoading(false);
             }
-
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -87,11 +108,10 @@ const Wall = ({viewedUserId}: WallProps) => {
         if (!editingText.trim()) return;
 
         try {
-            await api.put(`/posts/${postId}`,
-                {
-                    text: editingText,
-                    created: new Date().toISOString()
-                });
+            await api.put(`/posts/${postId}`, {
+                text: editingText,
+                created: new Date().toISOString()
+            });
             setEditingPostId(null);
             setEditingText("");
             await fetchPosts();
@@ -172,13 +192,12 @@ const Wall = ({viewedUserId}: WallProps) => {
                     </li>
                 ))}
             </ul>
+
             <div className="pagination">
                 <button disabled={page === 0} onClick={() => setPage(page - 1)}>
                     Föregående
                 </button>
-                <span>
-          Sida {page + 1} av {totalPages}
-        </span>
+                <span>Sida {page + 1} av {totalPages}</span>
                 <button
                     disabled={page + 1 >= totalPages}
                     onClick={() => setPage(page + 1)}
