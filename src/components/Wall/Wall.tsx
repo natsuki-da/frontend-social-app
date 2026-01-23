@@ -1,34 +1,26 @@
 import {useEffect, useState} from "react";
 import {useAuth} from "../../context/useAuth";
 import api from "../../api/api";
-import {User, WallPost, WallProps} from "../../types/enum";
+import {WallPost, WallProps} from "../../types/enum";
 
-type PageResponse<T> = {
-    content: T[];
-    totalPages: number;
-    totalElements: number;
-    number: number;
-    size: number;
-    first: boolean;
-    last: boolean;
-};
-
-type CommentResponseDTO = {
-    id: number | string;
-    postId?: number | string;
-    userId?: number | string;
-    username?: string;
-    text?: string;
-    created?: string;
-    createdAt?: string;
+type UserResponseDTO = {
+    id: number;
+    username: string;
+    email: string;
+    role: string;
+    displayName: string;
+    bio: string;
+    profileImagePath?: string | null;
 };
 
 const Wall = ({viewedUserId}: WallProps) => {
     const {token, userId: loggedInUserId} = useAuth();
 
     const [posts, setPosts] = useState<WallPost[]>([]);
-    const [user, setUser] = useState<User | null>(null);
+    const [user, setUser] = useState<UserResponseDTO | null>(null);
     const [loading, setLoading] = useState(true);
+    const [profileLoading, setProfileLoading] = useState(true);
+
     const [newPostText, setNewPostText] = useState("");
     const [editingPostId, setEditingPostId] = useState<number | null>(null);
     const [editingText, setEditingText] = useState("");
@@ -39,28 +31,27 @@ const Wall = ({viewedUserId}: WallProps) => {
     const isOwnWall = !viewedUserId || String(viewedUserId) === String(loggedInUserId);
     const targetUserId = viewedUserId ?? loggedInUserId;
 
-    const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
-    const [commentsByPost, setCommentsByPost] = useState<Record<string, CommentResponseDTO[]>>({});
-    const [commentsLoading, setCommentsLoading] = useState<Record<string, boolean>>({});
-    const [commentsError, setCommentsError] = useState<Record<string, string | null>>({});
-    const [commentPageByPost, setCommentPageByPost] = useState<Record<string, number>>({});
-    const [commentTotalPagesByPost, setCommentTotalPagesByPost] = useState<Record<string, number>>({});
-    const [commentTotalElementsByPost, setCommentTotalElementsByPost] = useState<Record<string, number>>({});
-
-    const [newCommentByPost, setNewCommentByPost] = useState<Record<string, string>>({});
-    const [commentSubmitting, setCommentSubmitting] = useState<Record<string, boolean>>({});
-
     useEffect(() => {
         setPage(0);
     }, [targetUserId]);
 
-    const fetchPosts = async () => {
-        if (!token) {
-            setLoading(false);
-            return;
-        }
+    const fetchProfile = async () => {
+        if (!token || !targetUserId) return;
 
-        setLoading(true);
+        setProfileLoading(true);
+        try {
+            const res = await api.get<UserResponseDTO>(`/users/${targetUserId}`);
+            setUser(res.data);
+        } catch (e) {
+            console.error(e);
+            setUser(null);
+        } finally {
+            setProfileLoading(false);
+        }
+    };
+
+    const fetchPosts = async () => {
+        if (!token) return;
 
         try {
             const response = isOwnWall
@@ -74,24 +65,23 @@ const Wall = ({viewedUserId}: WallProps) => {
 
             setPosts(content);
             setTotalPages(data.totalPages || 1);
-
-            setUser({
-                id: Number(targetUserId),
-                displayName: content[0]?.displayName || "",
-                bio: "",
-            });
         } catch (error) {
             console.error(error);
-            setUser({id: Number(targetUserId), displayName: "", bio: ""});
             setPosts([]);
             setTotalPages(1);
-        } finally {
-            setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchPosts();
+        if (!token || !targetUserId) {
+            setLoading(false);
+            return;
+        }
+
+        setLoading(true);
+        Promise.all([fetchProfile(), fetchPosts()])
+            .catch(console.error)
+            .finally(() => setLoading(false));
     }, [token, targetUserId, page]);
 
     const handleCreatePost = async () => {
@@ -136,107 +126,52 @@ const Wall = ({viewedUserId}: WallProps) => {
         }
     };
 
-    const fetchCommentsForPost = async (postId: string, pageToLoad: number) => {
-        setCommentsLoading((prev) => ({...prev, [postId]: true}));
-        setCommentsError((prev) => ({...prev, [postId]: null}));
+    if (loading || profileLoading) return <p>Laddar inlägg...</p>;
+    if (!user) return <p>Kunde inte ladda profilen.</p>;
 
-        try {
-            const res = await api.get<PageResponse<CommentResponseDTO>>(
-                `/comments/post/${postId}?page=${pageToLoad}&size=10`
-            );
-
-            const incoming = res.data.content ?? [];
-
-            setCommentsByPost((prev) => {
-                const existing = prev[postId] ?? [];
-                const merged = pageToLoad === 0 ? incoming : [...existing, ...incoming];
-                return {...prev, [postId]: merged};
-            });
-
-            setCommentPageByPost((prev) => ({...prev, [postId]: res.data.number}));
-            setCommentTotalPagesByPost((prev) => ({...prev, [postId]: res.data.totalPages ?? 1}));
-            setCommentTotalElementsByPost((prev) => ({...prev, [postId]: res.data.totalElements ?? 0}));
-        } catch (e: any) {
-            console.error(e);
-            setCommentsError((prev) => ({
-                ...prev,
-                [postId]: e?.message ?? "Kunde inte hämta kommentarer",
-            }));
-        } finally {
-            setCommentsLoading((prev) => ({...prev, [postId]: false}));
-        }
-    };
-
-    const toggleComments = async (postIdRaw: number | string) => {
-        const postId = String(postIdRaw);
-        const isOpen = !!openComments[postId];
-
-        if (!isOpen) {
-            const alreadyLoaded = !!commentsByPost[postId];
-            if (!alreadyLoaded) {
-                await fetchCommentsForPost(postId, 0);
-            }
-        }
-
-        setOpenComments((prev) => ({...prev, [postId]: !isOpen}));
-    };
-
-    const loadMoreComments = async (postIdRaw: number | string) => {
-        const postId = String(postIdRaw);
-        const currentPage = commentPageByPost[postId] ?? 0;
-        const total = commentTotalPagesByPost[postId] ?? 1;
-        const nextPage = currentPage + 1;
-
-        if (nextPage >= total) return;
-        await fetchCommentsForPost(postId, nextPage);
-    };
-
-    const submitComment = async (postIdRaw: number | string) => {
-        const postId = String(postIdRaw);
-        const text = (newCommentByPost[postId] ?? "").trim();
-        if (!text) return;
-
-        setCommentSubmitting((prev) => ({...prev, [postId]: true}));
-        setCommentsError((prev) => ({...prev, [postId]: null}));
-
-        try {
-            const res = await api.post<CommentResponseDTO>(`/comments?postId=${postId}`, {text});
-            setNewCommentByPost((prev) => ({...prev, [postId]: ""}));
-
-            setCommentsByPost((prev) => {
-                const existing = prev[postId] ?? [];
-                return {...prev, [postId]: [res.data, ...existing]};
-            });
-
-            setCommentTotalElementsByPost((prev) => ({
-                ...prev,
-                [postId]: (prev[postId] ?? 0) + 1,
-            }));
-        } catch (e: any) {
-            console.error(e);
-            setCommentsError((prev) => ({
-                ...prev,
-                [postId]: e?.message ?? "Kunde inte skapa kommentar",
-            }));
-        } finally {
-            setCommentSubmitting((prev) => ({...prev, [postId]: false}));
-        }
-    };
-
-    const getCommentText = (c: CommentResponseDTO) => c.text ?? "";
-    const getCommentUsername = (c: CommentResponseDTO) => c.username ?? "Okänd";
-    const getCommentCreated = (c: CommentResponseDTO) => c.created ?? c.createdAt ?? "";
-
-    if (loading || !user) return <p>Laddar inlägg...</p>;
+    const profileImageUrl = user.profileImagePath?.trim() ? user.profileImagePath : null;
 
     return (
         <div className="feed-container">
-            <h1 className="center">{user.displayName}</h1>
+            <div className="profile-header" style={{marginBottom: 16}}>
+                <div style={{display: "flex", gap: 12, alignItems: "center"}}>
+                    {profileImageUrl ? (
+                        <img
+                            src={profileImageUrl}
+                            alt={user.displayName}
+                            style={{width: 72, height: 72, borderRadius: "50%", objectFit: "cover"}}
+                        />
+                    ) : (
+                        <div
+                            style={{
+                                width: 72,
+                                height: 72,
+                                borderRadius: "50%",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: 24,
+                                fontWeight: 700,
+                                background: "#eee",
+                            }}
+                        >
+                            {user.displayName?.slice(0, 1)?.toUpperCase()}
+                        </div>
+                    )}
 
-            <div className="about-me">
-                <p>
-                    <b>Om mig:</b> {user.bio}
-                </p>
+                    <div>
+                        <h1 className="center" style={{margin: 0}}>
+                            {user.displayName}
+                        </h1>
+                        <div style={{opacity: 0.8}}>@{user.username}</div>
+                    </div>
+                </div>
+
+                <div className="about-me" style={{marginTop: 12}}>
+                    <p style={{margin: 0}}>
+                        <b>Om mig:</b> {user.bio}
+                    </p>
+                </div>
             </div>
 
             {isOwnWall && (
@@ -253,138 +188,39 @@ const Wall = ({viewedUserId}: WallProps) => {
             {posts.length === 0 && <p>Inga inlägg hittades</p>}
 
             <ul className="post-list">
-                {posts.map((post) => {
-                    const postId = String(post.id);
+                {posts.map((post) => (
+                    <li key={post.id} className="post-card">
+                        {editingPostId === post.id ? (
+                            <div>
+                                <textarea value={editingText} onChange={(e) => setEditingText(e.target.value)}/>
+                                <button onClick={() => handleEditPost(post.id)}>Spara</button>
+                                <button onClick={() => setEditingPostId(null)}>Avbryt</button>
+                            </div>
+                        ) : (
+                            <>
+                                <p className="post-text">{post.text}</p>
+                                <hr/>
+                                <small className="post-date">
+                                    {new Date(post.created).toLocaleString()} av {user.displayName}
+                                </small>
 
-                    const isOpen = !!openComments[postId];
-                    const comments = commentsByPost[postId] ?? [];
-                    const isCommentsLoading = !!commentsLoading[postId];
-                    const err = commentsError[postId];
-
-                    const totalElements = commentTotalElementsByPost[postId];
-                    const countLabel =
-                        typeof totalElements === "number"
-                            ? totalElements
-                            : commentsByPost[postId]
-                                ? comments.length
-                                : undefined;
-
-                    const totalCommentPages = commentTotalPagesByPost[postId] ?? 1;
-                    const currentCommentPage = commentPageByPost[postId] ?? 0;
-                    const canLoadMore = currentCommentPage + 1 < totalCommentPages;
-
-                    const draft = newCommentByPost[postId] ?? "";
-                    const isSubmitting = !!commentSubmitting[postId];
-
-                    return (
-                        <li key={post.id} className="post-card">
-                            {editingPostId === post.id ? (
-                                <div>
-                  <textarea
-                      value={editingText}
-                      onChange={(e) => setEditingText(e.target.value)}
-                  />
-                                    <button onClick={() => handleEditPost(post.id)}>Spara</button>
-                                    <button onClick={() => setEditingPostId(null)}>Avbryt</button>
-                                </div>
-                            ) : (
-                                <>
-                                    <p className="post-text">{post.text}</p>
-                                    <hr/>
-                                    <small className="post-date">
-                                        {new Date(post.created).toLocaleString()} av {user.displayName}
-                                    </small>
-
-                                    <div style={{marginTop: 8}}>
-                                        <button onClick={() => toggleComments(post.id)}>
-                                            {isOpen
-                                                ? "Dölj kommentarer"
-                                                : countLabel === undefined
-                                                    ? "Visa kommentarer"
-                                                    : countLabel === 0
-                                                        ? "Inga kommentarer"
-                                                        : `Visa kommentarer (${countLabel})`}
+                                {isOwnWall && (
+                                    <div className="post-actions">
+                                        <button
+                                            onClick={() => {
+                                                setEditingPostId(post.id);
+                                                setEditingText(post.text);
+                                            }}
+                                        >
+                                            Redigera
                                         </button>
-
-                                        {isOpen && (
-                                            <div style={{marginTop: 8}}>
-                                                <div style={{display: "flex", gap: 8, marginBottom: 8}}>
-                                                    <input
-                                                        value={draft}
-                                                        onChange={(e) =>
-                                                            setNewCommentByPost((prev) => ({
-                                                                ...prev,
-                                                                [postId]: e.target.value,
-                                                            }))
-                                                        }
-                                                        placeholder="Skriv en kommentar..."
-                                                        style={{flex: 1}}
-                                                    />
-                                                    <button
-                                                        onClick={() => submitComment(post.id)}
-                                                        disabled={isSubmitting || !draft.trim()}
-                                                    >
-                                                        {isSubmitting ? "Skickar..." : "Skicka"}
-                                                    </button>
-                                                </div>
-
-                                                {isCommentsLoading && comments.length === 0 &&
-                                                    <p>Laddar kommentarer...</p>}
-                                                {err && <p style={{color: "crimson"}}>{err}</p>}
-
-                                                {comments.length === 0 && !isCommentsLoading && !err && (
-                                                    <p>Inga kommentarer ännu.</p>
-                                                )}
-
-                                                {comments.length > 0 && (
-                                                    <ul style={{paddingLeft: 16}}>
-                                                        {comments.map((c) => {
-                                                            const created = getCommentCreated(c);
-                                                            return (
-                                                                <li key={c.id} style={{marginBottom: 8}}>
-                                                                    <strong>{getCommentUsername(c)}</strong>: {getCommentText(c)}
-                                                                    {created ? (
-                                                                        <>
-                                                                            <br/>
-                                                                            <small>{new Date(created).toLocaleString()}</small>
-                                                                        </>
-                                                                    ) : null}
-                                                                </li>
-                                                            );
-                                                        })}
-                                                    </ul>
-                                                )}
-
-                                                {canLoadMore && (
-                                                    <button
-                                                        onClick={() => loadMoreComments(post.id)}
-                                                        disabled={isCommentsLoading}
-                                                    >
-                                                        {isCommentsLoading ? "Laddar..." : "Visa fler"}
-                                                    </button>
-                                                )}
-                                            </div>
-                                        )}
+                                        <button onClick={() => handleDeletePost(post.id)}>Ta bort</button>
                                     </div>
-
-                                    {isOwnWall && (
-                                        <div className="post-actions">
-                                            <button
-                                                onClick={() => {
-                                                    setEditingPostId(post.id);
-                                                    setEditingText(post.text);
-                                                }}
-                                            >
-                                                Redigera
-                                            </button>
-                                            <button onClick={() => handleDeletePost(post.id)}>Ta bort</button>
-                                        </div>
-                                    )}
-                                </>
-                            )}
-                        </li>
-                    );
-                })}
+                                )}
+                            </>
+                        )}
+                    </li>
+                ))}
             </ul>
 
             <div className="pagination">
