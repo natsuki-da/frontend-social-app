@@ -16,8 +16,9 @@ const Wall = ({viewedUserId}: WallProps) => {
     const [page, setPage] = useState(0);
     const [totalPages, setTotalPages] = useState(1);
 
-    const isOwnWall = !viewedUserId || viewedUserId === loggedInUserId;
-    const targetUserId = viewedUserId || loggedInUserId;
+    const isOwnWall =
+        !viewedUserId || String(viewedUserId) === String(loggedInUserId);
+    const targetUserId = viewedUserId ?? loggedInUserId;
 
     useEffect(() => {
         setPage(0);
@@ -31,57 +32,31 @@ const Wall = ({viewedUserId}: WallProps) => {
 
         setLoading(true);
 
-        if (String(loggedInUserId) === String(targetUserId)) {
-            try {
-                const response = await api.get(`/posts/me?page=${page}&size=10`);
-                const data = response.data;
-
-                const filteredPosts: WallPost[] = (data.content || []).filter(
-                    (post: WallPost) => String(post.userId) === String(targetUserId)
-                );
-
-                setPosts(filteredPosts);
-                setTotalPages(data.totalPages || 1);
-
-                setUser({
-                    id: Number(targetUserId),
-                    displayName: filteredPosts[0]?.displayName || "",
-                    bio: "",
+        try {
+            const response = isOwnWall
+                ? await api.get("/posts/me", {params: {page, size: 10}})
+                : await api.get("/posts/get", {
+                    params: {userId: Number(targetUserId), page, size: 10},
                 });
-            } catch (error) {
-                console.error(error);
-            } finally {
-                setLoading(false);
-            }
-        } else {
-            try {
-                setLoading(true);
 
-                const response = await api.get(`/users/${targetUserId}/with-posts`);
-                const data = response.data;
+            const data = response.data;
+            const content: WallPost[] = data.content || [];
 
-                const content: WallPost[] = data.posts || [];
+            setPosts(content);
+            setTotalPages(data.totalPages || 1);
 
-                setPosts(content);
-                setTotalPages(1);
-
-                setUser({
-                    id: data.user?.id ?? Number(targetUserId),
-                    displayName: data.user?.displayName ?? data.user?.username ?? "",
-                    bio: data.user?.bio ?? "",
-                });
-            } catch (error) {
-                console.error(error);
-                setUser({
-                    id: Number(targetUserId),
-                    displayName: "",
-                    bio: "",
-                });
-                setPosts([]);
-                setTotalPages(1);
-            } finally {
-                setLoading(false);
-            }
+            setUser({
+                id: Number(targetUserId),
+                displayName: content[0]?.displayName || "",
+                bio: "",
+            });
+        } catch (error) {
+            console.error(error);
+            setUser({id: Number(targetUserId), displayName: "", bio: ""});
+            setPosts([]);
+            setTotalPages(1);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -93,7 +68,7 @@ const Wall = ({viewedUserId}: WallProps) => {
         if (!newPostText.trim()) return;
 
         try {
-            await api.post(`/users/posts`, {
+            await api.post("/users/posts", {
                 text: newPostText,
                 created: new Date().toISOString(),
             });
@@ -110,7 +85,7 @@ const Wall = ({viewedUserId}: WallProps) => {
         try {
             await api.put(`/posts/${postId}`, {
                 text: editingText,
-                created: new Date().toISOString()
+                created: new Date().toISOString(),
             });
             setEditingPostId(null);
             setEditingText("");
@@ -138,16 +113,18 @@ const Wall = ({viewedUserId}: WallProps) => {
             <h1 className="center">{user.displayName}</h1>
 
             <div className="about-me">
-                <p><b>Om mig:</b> {user.bio}</p>
+                <p>
+                    <b>Om mig:</b> {user.bio}
+                </p>
             </div>
 
             {isOwnWall && (
                 <div className="create-post">
-                    <textarea
-                        value={newPostText}
-                        onChange={(e) => setNewPostText(e.target.value)}
-                        placeholder="Skriv ett nytt inlägg..."
-                    />
+          <textarea
+              value={newPostText}
+              onChange={(e) => setNewPostText(e.target.value)}
+              placeholder="Skriv ett nytt inlägg..."
+          />
                     <button onClick={handleCreatePost}>Publicera</button>
                 </div>
             )}
@@ -159,10 +136,10 @@ const Wall = ({viewedUserId}: WallProps) => {
                     <li key={post.id} className="post-card">
                         {editingPostId === post.id ? (
                             <div>
-                                <textarea
-                                    value={editingText}
-                                    onChange={(e) => setEditingText(e.target.value)}
-                                />
+                <textarea
+                    value={editingText}
+                    onChange={(e) => setEditingText(e.target.value)}
+                />
                                 <button onClick={() => handleEditPost(post.id)}>Spara</button>
                                 <button onClick={() => setEditingPostId(null)}>Avbryt</button>
                             </div>
@@ -184,7 +161,9 @@ const Wall = ({viewedUserId}: WallProps) => {
                                         >
                                             Redigera
                                         </button>
-                                        <button onClick={() => handleDeletePost(post.id)}>Ta bort</button>
+                                        <button onClick={() => handleDeletePost(post.id)}>
+                                            Ta bort
+                                        </button>
                                     </div>
                                 )}
                             </>
@@ -197,7 +176,9 @@ const Wall = ({viewedUserId}: WallProps) => {
                 <button disabled={page === 0} onClick={() => setPage(page - 1)}>
                     Föregående
                 </button>
-                <span>Sida {page + 1} av {totalPages}</span>
+                <span>
+          Sida {page + 1} av {totalPages}
+        </span>
                 <button
                     disabled={page + 1 >= totalPages}
                     onClick={() => setPage(page + 1)}

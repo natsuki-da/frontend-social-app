@@ -22,7 +22,7 @@ const Feed = () => {
         setLoading(true);
 
         try {
-            const response = await api.get<PostResponse>(`/posts?page=${page}&size=10`);
+            const response = await api.get<PostResponse>(`/posts/get?page=${page}&size=10`);
             setPosts(response.data.content);
 
             setTotalPages(response.data.totalPages || 1);
