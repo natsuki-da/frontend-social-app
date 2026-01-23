@@ -26,6 +26,15 @@ type CommentResponseDTO = {
     createdAt?: string;
 };
 
+type FriendshipStatus = "PENDING" | "ACCEPTED" | "DECLINED";
+
+type FriendshipRespondDTO = {
+    id: number;
+    sender: number;
+    receiver: number;
+    status: FriendshipStatus;
+};
+
 const Feed = () => {
     const {token, userId} = useAuth();
     const [posts, setPosts] = useState<PostContent[]>([]);
@@ -34,15 +43,15 @@ const Feed = () => {
     const [page, setPage] = useState(0);
     const [totalPages, setTotalPages] = useState(1);
 
+    const [pendingIncomingCount, setPendingIncomingCount] = useState(0);
+
     const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
     const [commentsByPost, setCommentsByPost] = useState<Record<string, CommentResponseDTO[]>>({});
     const [commentsLoading, setCommentsLoading] = useState<Record<string, boolean>>({});
     const [commentsError, setCommentsError] = useState<Record<string, string | null>>({});
-
     const [commentPageByPost, setCommentPageByPost] = useState<Record<string, number>>({});
     const [commentTotalPagesByPost, setCommentTotalPagesByPost] = useState<Record<string, number>>({});
     const [commentTotalElementsByPost, setCommentTotalElementsByPost] = useState<Record<string, number>>({});
-
     const [newCommentByPost, setNewCommentByPost] = useState<Record<string, string>>({});
     const [commentSubmitting, setCommentSubmitting] = useState<Record<string, boolean>>({});
 
@@ -64,6 +73,21 @@ const Feed = () => {
         }
     };
 
+    const fetchPendingIncomingCount = async () => {
+        if (!token || !userId) return;
+
+        try {
+            const res = await api.get<FriendshipRespondDTO[]>(`/friendship/users/${userId}`);
+            const count = (res.data || []).filter(
+                (f) => f.status === "PENDING" && String(f.receiver) === String(userId)
+            ).length;
+            setPendingIncomingCount(count);
+        } catch (e) {
+            console.error(e);
+            setPendingIncomingCount(0);
+        }
+    };
+
     const fetchCommentsForPost = async (postId: string, pageToLoad: number) => {
         setCommentsLoading((prev) => ({...prev, [postId]: true}));
         setCommentsError((prev) => ({...prev, [postId]: null}));
@@ -74,6 +98,7 @@ const Feed = () => {
             );
 
             const incoming = res.data.content ?? [];
+
             setCommentsByPost((prev) => {
                 const existing = prev[postId] ?? [];
                 const merged = pageToLoad === 0 ? incoming : [...existing, ...incoming];
@@ -158,14 +183,23 @@ const Feed = () => {
         getAllPosts(page);
     }, [token, userId, page]);
 
-    if (loading) return <p>Laddar inlägg...</p>;
+    useEffect(() => {
+        fetchPendingIncomingCount();
+    }, [token, userId]);
+
+    if (loading) {
+        return <p>Laddar inlägg...</p>;
+    }
 
     return (
         <S.Container>
             <Navigationbar/>
 
             <div className="feed-container">
-                <Link to="/wall">Till min sida</Link>
+                <Link to="/wall">
+                    Till min sida{pendingIncomingCount > 0 ? ` (${pendingIncomingCount})` : ""}
+                </Link>
+
                 <h1>Inlägg</h1>
 
                 {posts?.length === 0 && <p>Inga inlägg hittades</p>}
@@ -198,9 +232,7 @@ const Feed = () => {
                                 <Link to={`/wall/${post.userId}`}>{post.username}</Link>
                                 <p className="post-text">{post.text}</p>
                                 <hr/>
-                                <small className="post-date">
-                                    {new Date(post.created).toLocaleString()}
-                                </small>
+                                <small className="post-date">{new Date(post.created).toLocaleString()}</small>
 
                                 <div style={{marginTop: 8}}>
                                     <button onClick={() => toggleComments(post.id)}>
