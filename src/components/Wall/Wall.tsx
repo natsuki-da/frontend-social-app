@@ -11,7 +11,21 @@ type UserResponseDTO = {
     role: string;
     displayName: string;
     bio: string;
-    profileImagePath?: string | null;
+};
+
+type PageResponse<T> = {
+    content: T[];
+    totalPages: number;
+    totalElements: number;
+    number: number;
+};
+
+type CommentResponseDTO = {
+    id: number | string;
+    username?: string;
+    text?: string;
+    created?: string;
+    createdAt?: string;
 };
 
 type FriendshipStatus = "PENDING" | "ACCEPTED" | "DECLINED";
@@ -26,416 +40,213 @@ type FriendshipRespondDTO = {
 };
 
 const Wall = ({viewedUserId}: WallProps) => {
-    const {token, userId: loggedInUserId, role} = useAuth();
+    const {token, userId, role} = useAuth();
     const navigate = useNavigate();
 
-    const [posts, setPosts] = useState<WallPost[]>([]);
-    const [user, setUser] = useState<UserResponseDTO | null>(null);
+    const isAdmin = role === "ADMIN";
+    const effectiveUserId = userId ? String(userId) : null;
 
+    const isOwnWall =
+        !viewedUserId || String(viewedUserId) === String(effectiveUserId);
+
+    const targetUserId = viewedUserId ?? effectiveUserId;
+
+    const [user, setUser] = useState<UserResponseDTO | null>(null);
+    const [posts, setPosts] = useState<WallPost[]>([]);
+    const [page, setPage] = useState(0);
+    const [totalPages, setTotalPages] = useState(1);
     const [loading, setLoading] = useState(true);
     const [profileLoading, setProfileLoading] = useState(true);
 
+    const [friendshipsAll, setFriendshipsAll] = useState<FriendshipRespondDTO[]>(
+        []
+    );
+    const [friendsAccepted, setFriendsAccepted] = useState<
+        FriendshipRespondDTO[]
+    >([]);
+
     const [newPostText, setNewPostText] = useState("");
-    const [editingPostId, setEditingPostId] = useState<number | null>(null);
-    const [editingText, setEditingText] = useState("");
 
-    const [page, setPage] = useState(0);
-    const [totalPages, setTotalPages] = useState(1);
-
-    const [friendshipsAll, setFriendshipsAll] = useState<FriendshipRespondDTO[]>([]);
-    const [friendsAccepted, setFriendsAccepted] = useState<FriendshipRespondDTO[]>([]);
-    const [friendsLoading, setFriendsLoading] = useState(false);
-    const [friendsError, setFriendsError] = useState<string | null>(null);
-
-    const isOwnWall = !viewedUserId || String(viewedUserId) === String(loggedInUserId);
-    const targetUserId = viewedUserId ?? loggedInUserId;
-
-    const isAdmin = role === "ADMIN";
+    const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
+    const [commentsByPost, setCommentsByPost] = useState<
+        Record<string, CommentResponseDTO[]>
+    >({});
+    const [commentPageByPost, setCommentPageByPost] = useState<
+        Record<string, number>
+    >({});
+    const [commentTotalPagesByPost, setCommentTotalPagesByPost] = useState<
+        Record<string, number>
+    >({});
 
     useEffect(() => {
         setPage(0);
     }, [targetUserId]);
 
-    const fetchProfile = async () => {
-        if (!token || !targetUserId) return;
-        setProfileLoading(true);
-        try {
-            const res = await api.get<UserResponseDTO>(`/users/${targetUserId}`);
-            setUser(res.data);
-        } catch (e) {
-            console.error(e);
-            setUser(null);
-        } finally {
-            setProfileLoading(false);
-        }
-    };
-
-    const fetchPosts = async () => {
-        if (!token) return;
-
-        try {
-            const response = isOwnWall
-                ? await api.get("/posts/me", {params: {page, size: 10}})
-                : await api.get("/posts/get", {
-                    params: {userId: Number(targetUserId), page, size: 10},
-                });
-
-            setPosts(response.data.content || []);
-            setTotalPages(response.data.totalPages || 1);
-        } catch (e) {
-            console.error(e);
-            setPosts([]);
-            setTotalPages(1);
-        }
-    };
-
-    const fetchFriendships = async () => {
-        if (!token || !targetUserId) return;
-
-        setFriendsLoading(true);
-        setFriendsError(null);
-
-        let acceptedOk = false;
-
-        try {
-            const acceptedRes = await api.get<FriendshipRespondDTO[]>(
-                `/friendship/users/${targetUserId}/friends`
-            );
-            setFriendsAccepted(acceptedRes.data || []);
-            acceptedOk = true;
-        } catch (e: any) {
-            console.error(e);
-            setFriendsAccepted([]);
-            setFriendsError(e?.message ?? "Kunde inte ladda vänner");
-        }
-
-        if (isOwnWall) {
-            try {
-                const allRes = await api.get<FriendshipRespondDTO[]>(
-                    `/friendship/users/${targetUserId}`
-                );
-                setFriendshipsAll(allRes.data || []);
-            } catch (e: any) {
-                console.error(e);
-                setFriendshipsAll([]);
-                if (acceptedOk) {
-                    setFriendsError(null);
-                } else {
-                    setFriendsError((prev) => prev ?? (e?.message ?? "Kunde inte ladda vänskaper"));
-                }
-            }
-        } else {
-            setFriendshipsAll([]);
-        }
-
-        setFriendsLoading(false);
-    };
-
     useEffect(() => {
-        if (!token || !targetUserId) {
-            setLoading(false);
-            return;
-        }
+        if (!token || !targetUserId) return;
 
-        setLoading(true);
-        Promise.all([fetchProfile(), fetchPosts(), fetchFriendships()])
-            .catch(console.error)
-            .finally(() => setLoading(false));
+        const load = async () => {
+            setLoading(true);
+
+            const [profile, postsRes, friends, all] = await Promise.all([
+                api.get(`/users/${targetUserId}`),
+                isOwnWall
+                    ? api.get("/posts/me", {params: {page, size: 10}})
+                    : api.get("/posts/get", {
+                        params: {userId: targetUserId, page, size: 10},
+                    }),
+                api.get(`/friendship/users/${targetUserId}/friends`),
+                isOwnWall
+                    ? api.get(`/friendship/users/${targetUserId}`)
+                    : Promise.resolve({data: []}),
+            ]);
+
+            setUser(profile.data);
+            setPosts(postsRes.data.content ?? []);
+            setTotalPages(postsRes.data.totalPages ?? 1);
+            setFriendsAccepted(friends.data ?? []);
+            setFriendshipsAll(all.data ?? []);
+            setLoading(false);
+            setProfileLoading(false);
+        };
+
+        load();
     }, [token, targetUserId, page, isOwnWall]);
 
-    const handleCreatePost = async () => {
-        if (!newPostText.trim()) return;
+    const pendingIncoming = useMemo(
+        () =>
+            friendshipsAll.filter(
+                (f) => f.status === "PENDING" && String(f.receiver) === effectiveUserId
+            ),
+        [friendshipsAll, effectiveUserId]
+    );
 
-        try {
-            await api.post("/users/posts", {
-                text: newPostText,
-                created: new Date().toISOString(),
-            });
-            setNewPostText("");
-            await fetchPosts();
-        } catch (error) {
-            console.error(error);
-        }
-    };
+    const acceptedForViewedWall = useMemo(() => {
+        if (!targetUserId) return [];
+        const target = String(targetUserId);
 
-    const handleEditPost = async (postId: number) => {
-        if (!editingText.trim()) return;
+        return friendsAccepted.map((f) => {
+            const senderIsTarget = String(f.sender) === target;
+            const otherId = senderIsTarget ? f.receiver : f.sender;
+            const otherName = senderIsTarget ? f.receiverDisplayName : f.senderDisplayName;
 
-        try {
-            await api.put(`/posts/${postId}`, {
-                text: editingText,
-                created: new Date().toISOString(),
-            });
-            setEditingPostId(null);
-            setEditingText("");
-            await fetchPosts();
-        } catch (error) {
-            console.error(error);
-        }
-    };
-
-    const handleDeletePost = async (postId: number) => {
-        if (!window.confirm("Vill du ta bort det här inlägget?")) return;
-
-        try {
-            await api.delete(`/posts/${postId}`);
-            await fetchPosts();
-        } catch (error) {
-            console.error(error);
-        }
-    };
-
-    const getOtherUserIdFromFriendship = (f: FriendshipRespondDTO) => {
-        const wallUserId = Number(targetUserId);
-        return f.sender === wallUserId ? f.receiver : f.sender;
-    };
-
-    const getOtherUserDisplayNameFromFriendship = (f: FriendshipRespondDTO) => {
-        const wallUserId = Number(targetUserId);
-        const name = f.sender === wallUserId ? f.receiverDisplayName ?? null : f.senderDisplayName ?? null;
-        return name && name.trim().length > 0 ? name : `User ${getOtherUserIdFromFriendship(f)}`;
-    };
-
-    const pendingIncoming = useMemo(() => {
-        if (!isOwnWall || !loggedInUserId) return [];
-        return friendshipsAll.filter(
-            (f) => f.status === "PENDING" && String(f.receiver) === String(loggedInUserId)
-        );
-    }, [friendshipsAll, isOwnWall, loggedInUserId]);
-
-    const pendingOutgoing = useMemo(() => {
-        if (!isOwnWall || !loggedInUserId) return [];
-        return friendshipsAll.filter(
-            (f) => f.status === "PENDING" && String(f.sender) === String(loggedInUserId)
-        );
-    }, [friendshipsAll, isOwnWall, loggedInUserId]);
-
-    const declined = useMemo(() => {
-        if (!isOwnWall) return [];
-        return friendshipsAll.filter((f) => f.status === "DECLINED");
-    }, [friendshipsAll, isOwnWall]);
-
-    const accepted = useMemo(() => friendsAccepted, [friendsAccepted]);
-
-    const relationshipWithViewedUser = useMemo(() => {
-        if (!loggedInUserId || !targetUserId) return null;
-        if (isOwnWall) return null;
-
-        const match = friendsAccepted.find((f) => {
-            const a = String(f.sender) === String(loggedInUserId) && String(f.receiver) === String(targetUserId);
-            const b = String(f.receiver) === String(loggedInUserId) && String(f.sender) === String(targetUserId);
-            return a || b;
+            return {...f, otherId, otherName};
         });
+    }, [friendsAccepted, targetUserId]);
 
-        return match?.status ?? null;
-    }, [loggedInUserId, targetUserId, isOwnWall, friendsAccepted]);
-
-    const sendFriendRequest = async () => {
-        if (!loggedInUserId || !targetUserId) return;
-        if (isOwnWall) return;
-
-        try {
-            await api.put(`/friendship/users/${loggedInUserId}/add-friend`, null, {
-                params: {receiverId: Number(targetUserId)},
-            });
-            await fetchFriendships();
-        } catch (e) {
-            console.error(e);
-        }
-    };
+    const canModeratePost = (post: any) =>
+        isAdmin || String(post.userId) === effectiveUserId;
 
     const acceptRequest = async (friendshipId: number) => {
-        try {
-            await api.put(`/friendship/${friendshipId}/accept`);
-            await fetchFriendships();
-        } catch (e) {
-            console.error(e);
-        }
+        await api.put(`/friendship/${friendshipId}/accept`);
+        location.reload();
     };
 
     const rejectRequest = async (friendshipId: number) => {
-        try {
-            await api.put(`/friendship/${friendshipId}/reject`);
-            await fetchFriendships();
-        } catch (e) {
-            console.error(e);
-        }
+        await api.put(`/friendship/${friendshipId}/reject`);
+        location.reload();
     };
 
-    const canEditOrDeletePost = (post: WallPost) => {
-        if (!loggedInUserId) return false;
-        const isOwner = String(post.userId) === String(loggedInUserId);
-        return isOwner || isAdmin;
+    const toggleComments = async (postId: number) => {
+        const key = String(postId);
+        if (!openComments[key]) {
+            const res = await api.get<PageResponse<CommentResponseDTO>>(
+                `/comments/post/${postId}?page=0&size=10`
+            );
+            setCommentsByPost((p) => ({...p, [key]: res.data.content}));
+            setCommentPageByPost((p) => ({...p, [key]: 0}));
+            setCommentTotalPagesByPost((p) => ({...p, [key]: res.data.totalPages}));
+        }
+        setOpenComments((p) => ({...p, [key]: !p[key]}));
     };
 
     if (!token) return <p>Du måste vara inloggad.</p>;
-    if (!targetUserId) return <p>Laddar profil...</p>;
-    if (loading || profileLoading) return <p>Laddar inlägg...</p>;
+    if (loading || profileLoading) return <p>Laddar...</p>;
     if (!user) return <p>Kunde inte ladda profilen.</p>;
 
     return (
         <div className="feed-container">
-            <button onClick={() => navigate("/feed")}>Tillbaka till flödet</button>
+            <button onClick={() => navigate("/feed")}>Tillbaka</button>
 
-            <div style={{marginBottom: 16}}>
-                <h1>{user.displayName}</h1>
-                <div>@{user.username}</div>
-                <p>
-                    <b>Om mig:</b> {user.bio}
-                </p>
-
-                {!isOwnWall && (
-                    <div style={{marginTop: 8}}>
-                        <button
-                            onClick={sendFriendRequest}
-                            disabled={relationshipWithViewedUser === "PENDING" || relationshipWithViewedUser === "ACCEPTED"}
-                        >
-                            {relationshipWithViewedUser === "ACCEPTED"
-                                ? "Ni är vänner"
-                                : relationshipWithViewedUser === "PENDING"
-                                    ? "Förfrågan skickad"
-                                    : "Lägg till vän"}
-                        </button>
-                    </div>
-                )}
-            </div>
-
-            <div style={{marginBottom: 16}}>
-                <h2>Vänner</h2>
-
-                {friendsLoading && <p>Laddar vänner...</p>}
-                {friendsError && <p>{friendsError}</p>}
-
-                {!friendsLoading && accepted.length === 0 && <p>Inga vänner hittades</p>}
-
-                {!friendsLoading && accepted.length > 0 && (
-                    <ul style={{listStyle: "none", paddingLeft: 0}}>
-                        {accepted.map((f) => {
-                            const otherId = getOtherUserIdFromFriendship(f);
-                            const otherName = getOtherUserDisplayNameFromFriendship(f);
-                            return (
-                                <li key={f.id}>
-                                    <Link to={`/wall/${otherId}`}>{otherName}</Link>
-                                </li>
-                            );
-                        })}
-                    </ul>
-                )}
-
-                {isOwnWall && (
-                    <>
-                        <h3>Vänförfrågningar</h3>
-
-                        {pendingIncoming.length === 0 && pendingOutgoing.length === 0 &&
-                            <p>Inga väntande förfrågningar</p>}
-
-                        {pendingIncoming.length > 0 && (
-                            <div style={{marginBottom: 12}}>
-                                <div style={{fontWeight: 700, marginBottom: 6}}>Inkommande</div>
-                                <ul style={{listStyle: "none", paddingLeft: 0}}>
-                                    {pendingIncoming.map((f) => {
-                                        const otherId = getOtherUserIdFromFriendship(f);
-                                        const otherName = getOtherUserDisplayNameFromFriendship(f);
-                                        return (
-                                            <li key={f.id} style={{marginBottom: 8}}>
-                                                <Link to={`/wall/${otherId}`}>{otherName}</Link>{" "}
-                                                <button onClick={() => acceptRequest(f.id)}>Acceptera</button>
-                                                {" "}
-                                                <button onClick={() => rejectRequest(f.id)}>Avvisa</button>
-                                            </li>
-                                        );
-                                    })}
-                                </ul>
-                            </div>
-                        )}
-
-                        {pendingOutgoing.length > 0 && (
-                            <div style={{marginBottom: 12}}>
-                                <div style={{fontWeight: 700, marginBottom: 6}}>Skickade</div>
-                                <ul style={{listStyle: "none", paddingLeft: 0}}>
-                                    {pendingOutgoing.map((f) => {
-                                        const otherId = getOtherUserIdFromFriendship(f);
-                                        const otherName = getOtherUserDisplayNameFromFriendship(f);
-                                        return (
-                                            <li key={f.id}>
-                                                <Link to={`/wall/${otherId}`}>{otherName}</Link> (väntar)
-                                            </li>
-                                        );
-                                    })}
-                                </ul>
-                            </div>
-                        )}
-
-                        {declined.length > 0 && (
-                            <div style={{marginBottom: 12}}>
-                                <div style={{fontWeight: 700, marginBottom: 6}}>Avvisade</div>
-                                <ul style={{listStyle: "none", paddingLeft: 0}}>
-                                    {declined.map((f) => {
-                                        const otherId = getOtherUserIdFromFriendship(f);
-                                        const otherName = getOtherUserDisplayNameFromFriendship(f);
-                                        return (
-                                            <li key={f.id}>
-                                                <Link to={`/wall/${otherId}`}>{otherName}</Link>
-                                            </li>
-                                        );
-                                    })}
-                                </ul>
-                            </div>
-                        )}
-                    </>
-                )}
-            </div>
+            <h1>{user.displayName}</h1>
 
             {isOwnWall && (
                 <div>
           <textarea
               value={newPostText}
               onChange={(e) => setNewPostText(e.target.value)}
-              placeholder="Skriv ett nytt inlägg..."
           />
-                    <button onClick={handleCreatePost}>Publicera</button>
+                    <button
+                        onClick={async () => {
+                            await api.post("/users/posts", {text: newPostText});
+                            location.reload();
+                        }}
+                    >
+                        Publicera
+                    </button>
                 </div>
             )}
 
-            {posts.length === 0 && <p>Inga inlägg hittades</p>}
+            {isOwnWall && pendingIncoming.length > 0 && (
+                <>
+                    <h3>Vänförfrågningar</h3>
+                    <ul>
+                        {pendingIncoming.map((f) => (
+                            <li key={f.id}>
+                                <Link to={`/wall/${f.sender}`}>
+                                    {f.senderDisplayName ?? `User ${f.sender}`}
+                                </Link>
+                                <button onClick={() => acceptRequest(f.id)}>Acceptera</button>
+                                <button onClick={() => rejectRequest(f.id)}>Avvisa</button>
+                            </li>
+                        ))}
+                    </ul>
+                </>
+            )}
 
-            <ul style={{listStyle: "none", paddingLeft: 0}}>
+            {acceptedForViewedWall.length > 0 && (
+                <>
+                    <h3>Vänner</h3>
+                    <ul>
+                        {acceptedForViewedWall.map((f) => (
+                            <li key={f.id}>
+                                <Link to={`/wall/${f.otherId}`}>
+                                    {f.otherName ?? `User ${f.otherId}`}
+                                </Link>
+                            </li>
+                        ))}
+                    </ul>
+                </>
+            )}
+
+            <ul>
                 {posts.map((post) => {
-                    const canModerate = canEditOrDeletePost(post);
-
+                    const pid = String(post.id);
                     return (
                         <li key={post.id}>
-                            {editingPostId === post.id ? (
-                                <>
-                                    <textarea value={editingText} onChange={(e) => setEditingText(e.target.value)}/>
-                                    <button onClick={() => handleEditPost(post.id)}>Spara</button>
-                                    <button
-                                        onClick={() => {
-                                            setEditingPostId(null);
-                                            setEditingText("");
-                                        }}
-                                    >
-                                        Avbryt
-                                    </button>
-                                </>
-                            ) : (
-                                <>
-                                    <p>{post.text}</p>
-                                    <small>{new Date(post.created).toLocaleString()} av {post.username ?? user.displayName}</small>
+                            <p>{post.text}</p>
+                            <small>{new Date(post.created).toLocaleString()}</small>
 
-                                    {canModerate && (
-                                        <div>
-                                            <button
-                                                onClick={() => {
-                                                    setEditingPostId(post.id);
-                                                    setEditingText(post.text);
-                                                }}
-                                            >
-                                                Redigera
-                                            </button>
-                                            <button onClick={() => handleDeletePost(post.id)}>Ta bort</button>
-                                        </div>
-                                    )}
+                            <button onClick={() => toggleComments(post.id)}>
+                                {openComments[pid] ? "Dölj kommentarer" : "Visa kommentarer"}
+                            </button>
+
+                            {openComments[pid] &&
+                                commentsByPost[pid]?.map((c) => (
+                                    <div key={c.id}>
+                                        <strong>{c.username}</strong>: {c.text}
+                                    </div>
+                                ))}
+
+                            {canModeratePost(post) && (
+                                <>
+                                    <button
+                                        onClick={() =>
+                                            api.delete(`/posts/${post.id}`).then(() => location.reload())
+                                        }
+                                    >
+                                        Ta bort
+                                    </button>
                                 </>
                             )}
                         </li>
@@ -443,17 +254,15 @@ const Wall = ({viewedUserId}: WallProps) => {
                 })}
             </ul>
 
-            <div>
-                <button disabled={page === 0} onClick={() => setPage(page - 1)}>
-                    Föregående
-                </button>
-                <span>
-          Sida {page + 1} av {totalPages}
-        </span>
-                <button disabled={page + 1 >= totalPages} onClick={() => setPage(page + 1)}>
-                    Nästa
-                </button>
-            </div>
+            <button disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+                Föregående
+            </button>
+            <button
+                disabled={page + 1 >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+            >
+                Nästa
+            </button>
         </div>
     );
 };
