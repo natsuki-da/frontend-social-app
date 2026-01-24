@@ -29,7 +29,7 @@ const Signup = () => {
         try {
             const response = await api.post("/users", userInfo);
             if (response.data.username && response.data.email) {
-                navigate(Paths.FEED);
+                navigate(Paths.LOGIN, {state: {username}});
             }
             // const resToken = await api.post("/request-token", {username, password});
             // const token = response.data.token;
@@ -45,8 +45,7 @@ const Signup = () => {
             } else if (err.response?.status === 401) {
                 setError("Unauthorized");
             } else {
-                setError("Loging failed");
-                console.log(error);
+                setError("Kunde inte skapa kontot");
             }
         }
         // const handleSignup = async (e: { preventDefault: () => void; }) => {
@@ -81,12 +80,14 @@ const Signup = () => {
         <S.Container>
             <S.Form onSubmit={(handleSignup)}>
                 <S.Header>
-                    <h1>Sign up</h1>
-                    <S.Line/>
+                    <S.Title>Skapa konto</S.Title>
+                    <S.Subtitle>Tar mindre än en minut.</S.Subtitle>
                 </S.Header>
+
+                {error && <S.ErrorBox role="alert">{error}</S.ErrorBox>}
                 <S.Main>
                     <S.FormField>
-                        <S.Label>Username:</S.Label>
+                    <S.Label>Användarnamn</S.Label>
                         <S.Input
                             type="text"
                             id="username"
@@ -97,7 +98,7 @@ const Signup = () => {
                         />
                     </S.FormField>
                     <S.FormField>
-                        <S.Label>E-mail:</S.Label>
+                    <S.Label>E-post</S.Label>
                         <S.Input
                             type="email"
                             id="email"
@@ -108,7 +109,7 @@ const Signup = () => {
                         />
                     </S.FormField>
                     <S.FormField>
-                        <S.Label>Password:</S.Label>
+                    <S.Label>Lösenord</S.Label>
                         <S.Input
                             type="password"
                             id="password"
@@ -120,13 +121,13 @@ const Signup = () => {
                     </S.FormField>
                 </S.Main>
                 <S.Footer>
-                    <S.SignupButton>Sign up</S.SignupButton>
-                    <p style={{marginTop: "1rem", textAlign: "center"}}>
+                    <S.LoginButton type="submit">Skapa konto</S.LoginButton>
+                    <S.Hint>
                         Har du redan ett konto?{" "}
-                        <button type="button" onClick={() => navigate(Paths.LOGIN)}>
-                            Logga in här
-                        </button>
-                    </p>
+                        <S.InlineButton type="button" onClick={() => navigate(Paths.LOGIN)}>
+                            Logga in
+                        </S.InlineButton>
+                    </S.Hint>
                 </S.Footer>
             </S.Form>
         </S.Container>

@@ -1,8 +1,10 @@
-import {useEffect, useMemo, useState} from "react";
+import {useCallback, useEffect, useMemo, useState} from "react";
 import {useAuth} from "../../context/useAuth";
 import api from "../../api/api";
 import {WallPost, WallProps} from "../../types/enum";
 import {Link, useNavigate} from "react-router-dom";
+import * as S from "./Wall.styles";
+import Navigationbar from "../Navigationbar/Navigationbar";
 
 type UserResponseDTO = {
     id: number;
@@ -39,6 +41,13 @@ type FriendshipRespondDTO = {
     receiverDisplayName?: string | null;
 };
 
+const initialsFromName = (name: string) => {
+    const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+    const first = parts[0]?.[0] ?? "?";
+    const last = parts.length > 1 ? parts[parts.length - 1]?.[0] : "";
+    return (first + last).toUpperCase();
+};
+
 const Wall = ({viewedUserId}: WallProps) => {
     const {token, userId, role} = useAuth();
     const navigate = useNavigate();
@@ -71,23 +80,17 @@ const Wall = ({viewedUserId}: WallProps) => {
     const [commentsByPost, setCommentsByPost] = useState<
         Record<string, CommentResponseDTO[]>
     >({});
-    const [commentPageByPost, setCommentPageByPost] = useState<
-        Record<string, number>
-    >({});
-    const [commentTotalPagesByPost, setCommentTotalPagesByPost] = useState<
-        Record<string, number>
-    >({});
 
     useEffect(() => {
         setPage(0);
     }, [targetUserId]);
 
-    useEffect(() => {
+    const loadWall = useCallback(async () => {
         if (!token || !targetUserId) return;
 
-        const load = async () => {
-            setLoading(true);
+        setLoading(true);
 
+        try {
             const [profile, postsRes, friends, all] = await Promise.all([
                 api.get(`/users/${targetUserId}`),
                 isOwnWall
@@ -106,12 +109,15 @@ const Wall = ({viewedUserId}: WallProps) => {
             setTotalPages(postsRes.data.totalPages ?? 1);
             setFriendsAccepted(friends.data ?? []);
             setFriendshipsAll(all.data ?? []);
-            setLoading(false);
             setProfileLoading(false);
-        };
-
-        load();
+        } finally {
+            setLoading(false);
+        }
     }, [token, targetUserId, page, isOwnWall]);
+
+    useEffect(() => {
+        loadWall();
+    }, [loadWall]);
 
     const pendingIncoming = useMemo(
         () =>
@@ -128,7 +134,9 @@ const Wall = ({viewedUserId}: WallProps) => {
         return friendsAccepted.map((f) => {
             const senderIsTarget = String(f.sender) === target;
             const otherId = senderIsTarget ? f.receiver : f.sender;
-            const otherName = senderIsTarget ? f.receiverDisplayName : f.senderDisplayName;
+            const otherName = senderIsTarget
+                ? f.receiverDisplayName
+                : f.senderDisplayName;
 
             return {...f, otherId, otherName};
         });
@@ -139,12 +147,12 @@ const Wall = ({viewedUserId}: WallProps) => {
 
     const acceptRequest = async (friendshipId: number) => {
         await api.put(`/friendship/${friendshipId}/accept`);
-        location.reload();
+        await loadWall();
     };
 
     const rejectRequest = async (friendshipId: number) => {
         await api.put(`/friendship/${friendshipId}/reject`);
-        location.reload();
+        await loadWall();
     };
 
     const toggleComments = async (postId: number) => {
@@ -154,8 +162,6 @@ const Wall = ({viewedUserId}: WallProps) => {
                 `/comments/post/${postId}?page=0&size=10`
             );
             setCommentsByPost((p) => ({...p, [key]: res.data.content}));
-            setCommentPageByPost((p) => ({...p, [key]: 0}));
-            setCommentTotalPagesByPost((p) => ({...p, [key]: res.data.totalPages}));
         }
         setOpenComments((p) => ({...p, [key]: !p[key]}));
     };
@@ -165,105 +171,235 @@ const Wall = ({viewedUserId}: WallProps) => {
     if (!user) return <p>Kunde inte ladda profilen.</p>;
 
     return (
-        <div className="feed-container">
-            <button onClick={() => navigate("/feed")}>Tillbaka</button>
-
-            <h1>{user.displayName}</h1>
-
-            {isOwnWall && (
-                <div>
-          <textarea
-              value={newPostText}
-              onChange={(e) => setNewPostText(e.target.value)}
-          />
-                    <button
-                        onClick={async () => {
-                            await api.post("/users/posts", {text: newPostText});
-                            location.reload();
-                        }}
-                    >
-                        Publicera
-                    </button>
-                </div>
-            )}
-
-            {isOwnWall && pendingIncoming.length > 0 && (
-                <>
-                    <h3>Vänförfrågningar</h3>
-                    <ul>
-                        {pendingIncoming.map((f) => (
-                            <li key={f.id}>
-                                <Link to={`/wall/${f.sender}`}>
-                                    {f.senderDisplayName ?? `User ${f.sender}`}
-                                </Link>
-                                <button onClick={() => acceptRequest(f.id)}>Acceptera</button>
-                                <button onClick={() => rejectRequest(f.id)}>Avvisa</button>
-                            </li>
-                        ))}
-                    </ul>
-                </>
-            )}
-
-            {acceptedForViewedWall.length > 0 && (
-                <>
-                    <h3>Vänner</h3>
-                    <ul>
-                        {acceptedForViewedWall.map((f) => (
-                            <li key={f.id}>
-                                <Link to={`/wall/${f.otherId}`}>
-                                    {f.otherName ?? `User ${f.otherId}`}
-                                </Link>
-                            </li>
-                        ))}
-                    </ul>
-                </>
-            )}
-
-            <ul>
-                {posts.map((post) => {
-                    const pid = String(post.id);
-                    return (
-                        <li key={post.id}>
-                            <p>{post.text}</p>
-                            <small>{new Date(post.created).toLocaleString()}</small>
-
-                            <button onClick={() => toggleComments(post.id)}>
-                                {openComments[pid] ? "Dölj kommentarer" : "Visa kommentarer"}
-                            </button>
-
-                            {openComments[pid] &&
-                                commentsByPost[pid]?.map((c) => (
-                                    <div key={c.id}>
-                                        <strong>{c.username}</strong>: {c.text}
+        <S.Container>
+            <Navigationbar/>
+            <S.Top>
+                <S.TopContent>
+                    <div className="feed-container">
+                        <div className="wall-layout">
+                            <aside className="wall-sidebar">
+                                {isOwnWall && pendingIncoming.length > 0 && (
+                                    <div className="wall-box">
+                                        <h3 className="section-title">Vänförfrågningar</h3>
+                                        <ul className="list-clean">
+                                            {pendingIncoming.map((f) => (
+                                                <li key={f.id} className="row-card friend-card">
+                                                    <Link className="link" to={`/wall/${f.sender}`}>
+                                                        {f.senderDisplayName ?? `User ${f.sender}`}
+                                                    </Link>
+                                                    <div className="row-actions">
+                                                        <button
+                                                            className="btn btn-primary"
+                                                            onClick={() => acceptRequest(f.id)}
+                                                        >
+                                                            Acceptera
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-secondary"
+                                                            onClick={() => rejectRequest(f.id)}
+                                                        >
+                                                            Avvisa
+                                                        </button>
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
                                     </div>
-                                ))}
+                                )}
 
-                            {canModeratePost(post) && (
-                                <>
+                                {acceptedForViewedWall.length > 0 && (
+                                    <div className="wall-box">
+                                        <h3 className="section-title">Vänner</h3>
+                                        <ul className="list-clean list-inline">
+                                            {acceptedForViewedWall.map((f) => (
+                                                <li key={f.id} className="pill friend-pill">
+                                                    <Link className="link" to={`/wall/${f.otherId}`}>
+                                                        {f.otherName ?? `User ${f.otherId}`}
+                                                    </Link>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </aside>
+
+                            <main className="wall-main">
+                                <div className="stack">
+                                    <div className="toolbar">
+                                        <button className="btn" onClick={() => navigate("/feed")}>
+                                            Tillbaka
+                                        </button>
+                                        <Link className="btn" to="/feed">
+                                            Flödet
+                                        </Link>
+                                    </div>
+
+                                    <div className="card card-subtle">
+                                        <div className="post-header" style={{marginBottom: 0}}>
+                                            <div className="post-header-left">
+                                                <div className="avatar" aria-hidden>
+                                                    {initialsFromName(user.displayName)}
+                                                </div>
+                                                <div className="post-author">
+                                                    <div
+                                                        className="post-author-name"
+                                                        style={{fontSize: "1.25rem"}}
+                                                    >
+                                                        {user.displayName}
+                                                    </div>
+                                                    <div className="post-author-hint">
+                                                        @{user.username}
+                                                        {user.email ? ` · ${user.email}` : ""}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {!isOwnWall && (
+                                                <span
+                                                    className="pill"
+                                                    title="Visar användarens vägg"
+                                                >
+                          Besöker
+                        </span>
+                                            )}
+                                        </div>
+
+                                        {user.bio ? (
+                                            <div
+                                                style={{
+                                                    marginTop: 10,
+                                                    color: "#334155",
+                                                    whiteSpace: "pre-wrap",
+                                                }}
+                                            >
+                                                {user.bio}
+                                            </div>
+                                        ) : (
+                                            <div style={{marginTop: 10}} className="muted">
+                                                Ingen bio ännu.
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {isOwnWall && (
+                                    <div className="composer">
+                    <textarea
+                        className="composer-textarea"
+                        value={newPostText}
+                        onChange={(e) => setNewPostText(e.target.value)}
+                        placeholder="Skriv ett inlägg…"
+                    />
+                                        <div className="composer-actions">
+                                            <button
+                                                className="btn btn-primary"
+                                                onClick={async () => {
+                                                    const text = newPostText.trim();
+                                                    if (!text) return;
+                                                    await api.post("/users/posts", {text});
+                                                    setNewPostText("");
+                                                    await loadWall();
+                                                }}
+                                            >
+                                                Publicera
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="section">
+                                    <ul className="list-clean">
+                                        {posts.map((post) => {
+                                            const pid = String(post.id);
+                                            return (
+                                                <li key={post.id} className="post-card">
+                                                    <div className="post-header">
+                                                        <div className="post-header-left">
+                                                            <div className="avatar" aria-hidden>
+                                                                {initialsFromName(user.displayName)}
+                                                            </div>
+                                                            <div className="post-author">
+                                                                <div className="post-author-name">
+                                                                    {user.displayName}
+                                                                </div>
+                                                                <div className="post-author-hint">
+                                                                    {new Date(post.created).toLocaleString()}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <p className="post-text">{post.text}</p>
+
+                                                    <div className="post-footer">
+                            <span className="post-meta">
+                              {openComments[pid] ? "Kommentarer öppna" : ""}
+                            </span>
+
+                                                        <div className="post-actions">
+                                                            <button
+                                                                className="btn btn-small"
+                                                                onClick={() => toggleComments(post.id)}
+                                                            >
+                                                                {openComments[pid]
+                                                                    ? "Dölj kommentarer"
+                                                                    : "Visa kommentarer"}
+                                                            </button>
+
+                                                            {canModeratePost(post) && (
+                                                                <button
+                                                                    className="btn btn-small btn-danger"
+                                                                    onClick={async () => {
+                                                                        await api.delete(`/posts/${post.id}`);
+                                                                        await loadWall();
+                                                                    }}
+                                                                >
+                                                                    Ta bort
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {openComments[pid] && (
+                                                        <div className="comments">
+                                                            {commentsByPost[pid]?.map((c) => (
+                                                                <div key={c.id} className="comment">
+                                  <span className="comment-author">
+                                    {c.username}
+                                  </span>
+                                                                    <span className="comment-text">{c.text}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </div>
+
+                                <div className="pagination">
                                     <button
-                                        onClick={() =>
-                                            api.delete(`/posts/${post.id}`).then(() => location.reload())
-                                        }
+                                        className="btn"
+                                        disabled={page === 0}
+                                        onClick={() => setPage((p) => p - 1)}
                                     >
-                                        Ta bort
+                                        Föregående
                                     </button>
-                                </>
-                            )}
-                        </li>
-                    );
-                })}
-            </ul>
-
-            <button disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
-                Föregående
-            </button>
-            <button
-                disabled={page + 1 >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-            >
-                Nästa
-            </button>
-        </div>
+                                    <button
+                                        className="btn"
+                                        disabled={page + 1 >= totalPages}
+                                        onClick={() => setPage((p) => p + 1)}
+                                    >
+                                        Nästa
+                                    </button>
+                                </div>
+                            </main>
+                        </div>
+                    </div>
+                </S.TopContent>
+            </S.Top>
+        </S.Container>
     );
 };
 

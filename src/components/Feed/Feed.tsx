@@ -77,6 +77,13 @@ const getPostOwnerName = (post: any): string => {
     );
 };
 
+const initialsFromName = (name: string) => {
+    const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+    const first = parts[0]?.[0] ?? "?";
+    const last = parts.length > 1 ? parts[parts.length - 1]?.[0] : "";
+    return (first + last).toUpperCase();
+};
+
 const Feed = () => {
     const {token, userId, role} = useAuth();
 
@@ -292,16 +299,21 @@ const Feed = () => {
         <S.Container>
             <Navigationbar/>
 
-            <div className="feed-container">
-                <Link to="/wall">
-                    Till min sida{pendingIncomingCount > 0 ? ` (${pendingIncomingCount})` : ""}
-                </Link>
+            <S.Top>
+                <S.TopContent>
+                    <div className="feed-container">
+                <div className="toolbar">
+                    <Link className="btn" to="/wall">
+                        Min sida{pendingIncomingCount > 0 ? ` (${pendingIncomingCount})` : ""}
+                    </Link>
+                </div>
 
-                <h1>Inlägg</h1>
+                <h1 className="page-title">Inlägg</h1>
+                <p className="page-subtitle">Senaste inläggen – öppna en profil för att skriva själv.</p>
 
                 {posts.length === 0 && <p>Inga inlägg hittades</p>}
 
-                <ul className="post-list">
+                <div className="post-list" role="list">
                     {posts.map((post) => {
                         const postId = String(post.id);
 
@@ -330,15 +342,32 @@ const Feed = () => {
                         const isSubmitting = !!commentSubmitting[postId];
 
                         return (
-                            <li key={post.id} className="post-card">
-                                <Link to={ownerId ? `/wall/${ownerId}` : "/wall"}>{ownerName}</Link>
+                            <article key={post.id} className="post-card" role="listitem">
+                                <div className="post-header">
+                                    <div className="post-header-left">
+                                        <div className="avatar" aria-hidden>
+                                            {initialsFromName(ownerName)}
+                                        </div>
+                                        <div className="post-author">
+                                            <Link className="post-author-name" to={ownerId ? `/wall/${ownerId}` : "/wall"}>
+                                                {ownerName}
+                                            </Link>
+                                            <span className="post-author-hint">{ownerId ? `Profil · #${ownerId}` : "Profil"}</span>
+                                        </div>
+                                    </div>
+
+                                    <span className="post-meta">{new Date(post.created).toLocaleString()}</span>
+                                </div>
 
                                 {editingPostId === post.id ? (
                                     <>
-                                        <textarea value={editingText} onChange={(e) => setEditingText(e.target.value)}/>
+                                        <textarea value={editingText}
+                                                  onChange={(e) => setEditingText(e.target.value)}
+                                                  placeholder="Redigera inlägg…"/>
                                         <div className="post-actions">
-                                            <button onClick={() => handleEditPost(post.id)}>Spara</button>
+                                            <button className="btn btn-small btn-primary" onClick={() => handleEditPost(post.id)}>Spara</button>
                                             <button
+                                                className="btn btn-small"
                                                 onClick={() => {
                                                     setEditingPostId(null);
                                                     setEditingText("");
@@ -351,11 +380,10 @@ const Feed = () => {
                                 ) : (
                                     <>
                                         <p className="post-text">{post.text}</p>
-                                        <hr/>
-                                        <small className="post-date">{new Date(post.created).toLocaleString()}</small>
+                                        <div className="divider" />
 
                                         <div style={{marginTop: 8}}>
-                                            <button onClick={() => toggleComments(post.id)}>
+                                            <button className="btn btn-small" onClick={() => toggleComments(post.id)}>
                                                 {isOpen
                                                     ? "Dölj kommentarer"
                                                     : countLabel === undefined
@@ -367,7 +395,7 @@ const Feed = () => {
 
                                             {isOpen && (
                                                 <div style={{marginTop: 8}}>
-                                                    <div style={{display: "flex", gap: 8, marginBottom: 8}}>
+                                                    <div className="comment-composer">
                                                         <input
                                                             value={draft}
                                                             onChange={(e) =>
@@ -379,7 +407,8 @@ const Feed = () => {
                                                             placeholder="Skriv en kommentar..."
                                                             style={{flex: 1}}
                                                         />
-                                                        <button onClick={() => submitComment(post.id)}
+                                                        <button className="btn btn-primary"
+                                                                onClick={() => submitComment(post.id)}
                                                                 disabled={isSubmitting || !draft.trim()}>
                                                             {isSubmitting ? "Skickar..." : "Skicka"}
                                                         </button>
@@ -387,23 +416,23 @@ const Feed = () => {
 
                                                     {isCommentsLoading && comments.length === 0 &&
                                                         <p>Laddar kommentarer...</p>}
-                                                    {err && <p style={{color: "crimson"}}>{err}</p>}
+                                                    {err && <p style={{color: "crimson", marginTop: 0}}>{err}</p>}
 
                                                     {comments.length === 0 && !isCommentsLoading && !err &&
                                                         <p>Inga kommentarer ännu.</p>}
 
                                                     {comments.length > 0 && (
-                                                        <ul style={{paddingLeft: 16}}>
+                                                        <ul className="list-clean" style={{paddingLeft: 0}}>
                                                             {comments.map((c) => {
                                                                 const created = getCommentCreated(c);
                                                                 return (
-                                                                    <li key={c.id} style={{marginBottom: 8}}>
-                                                                        <strong>{getCommentUsername(c)}</strong>: {getCommentText(c)}
+                                                                    <li key={c.id} className="comment" style={{marginBottom: 8}}>
+                                                                        <span className="comment-author">{getCommentUsername(c)}</span>
+                                                                        <span className="comment-text">{getCommentText(c)}</span>
                                                                         {created ? (
-                                                                            <>
-                                                                                <br/>
-                                                                                <small>{new Date(created).toLocaleString()}</small>
-                                                                            </>
+                                                                            <span className="post-meta" style={{marginLeft: "auto"}}>
+                                                                              {new Date(created).toLocaleString()}
+                                                                            </span>
                                                                         ) : null}
                                                                     </li>
                                                                 );
@@ -412,7 +441,7 @@ const Feed = () => {
                                                     )}
 
                                                     {canLoadMore && (
-                                                        <button onClick={() => loadMoreComments(post.id)}
+                                                        <button className="btn" onClick={() => loadMoreComments(post.id)}
                                                                 disabled={isCommentsLoading}>
                                                             {isCommentsLoading ? "Laddar..." : "Visa fler"}
                                                         </button>
@@ -424,6 +453,7 @@ const Feed = () => {
                                         {canModerate && (
                                             <div className="post-actions">
                                                 <button
+                                                    className="btn btn-small"
                                                     onClick={() => {
                                                         setEditingPostId(post.id);
                                                         setEditingText(post.text);
@@ -431,28 +461,30 @@ const Feed = () => {
                                                 >
                                                     Redigera
                                                 </button>
-                                                <button onClick={() => handleDeletePost(post.id)}>Ta bort</button>
+                                                <button className="btn btn-small btn-danger" onClick={() => handleDeletePost(post.id)}>Ta bort</button>
                                             </div>
                                         )}
                                     </>
                                 )}
-                            </li>
+                            </article>
                         );
                     })}
-                </ul>
+                </div>
 
                 <div className="pagination">
-                    <button disabled={page === 0} onClick={() => setPage(page - 1)}>
+                    <button className="btn" disabled={page === 0} onClick={() => setPage(page - 1)}>
                         Föregående
                     </button>
                     <span>
             Sida {page + 1} av {totalPages}
           </span>
-                    <button disabled={page + 1 >= totalPages} onClick={() => setPage(page + 1)}>
+                    <button className="btn" disabled={page + 1 >= totalPages} onClick={() => setPage(page + 1)}>
                         Nästa
                     </button>
                 </div>
-            </div>
+                    </div>
+                </S.TopContent>
+            </S.Top>
         </S.Container>
     );
 };
