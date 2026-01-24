@@ -14,26 +14,6 @@ type UserResponseDTO = {
     profileImagePath?: string | null;
 };
 
-type PageResponse<T> = {
-    content: T[];
-    totalPages: number;
-    totalElements: number;
-    number: number;
-    size: number;
-    first: boolean;
-    last: boolean;
-};
-
-type CommentResponseDTO = {
-    id: number | string;
-    postId?: number | string;
-    userId?: number | string;
-    username?: string;
-    text?: string;
-    created?: string;
-    createdAt?: string;
-};
-
 type FriendshipStatus = "PENDING" | "ACCEPTED" | "DECLINED";
 
 type FriendshipRespondDTO = {
@@ -41,10 +21,12 @@ type FriendshipRespondDTO = {
     sender: number;
     receiver: number;
     status: FriendshipStatus;
+    senderDisplayName?: string | null;
+    receiverDisplayName?: string | null;
 };
 
 const Wall = ({viewedUserId}: WallProps) => {
-    const {token, userId: loggedInUserId} = useAuth();
+    const {token, userId: loggedInUserId, role} = useAuth();
     const navigate = useNavigate();
 
     const [posts, setPosts] = useState<WallPost[]>([]);
@@ -65,18 +47,10 @@ const Wall = ({viewedUserId}: WallProps) => {
     const [friendsLoading, setFriendsLoading] = useState(false);
     const [friendsError, setFriendsError] = useState<string | null>(null);
 
-    const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
-    const [commentsByPost, setCommentsByPost] = useState<Record<string, CommentResponseDTO[]>>({});
-    const [commentsLoading, setCommentsLoading] = useState<Record<string, boolean>>({});
-    const [commentsError, setCommentsError] = useState<Record<string, string | null>>({});
-    const [commentPageByPost, setCommentPageByPost] = useState<Record<string, number>>({});
-    const [commentTotalPagesByPost, setCommentTotalPagesByPost] = useState<Record<string, number>>({});
-    const [commentTotalElementsByPost, setCommentTotalElementsByPost] = useState<Record<string, number>>({});
-    const [newCommentByPost, setNewCommentByPost] = useState<Record<string, string>>({});
-    const [commentSubmitting, setCommentSubmitting] = useState<Record<string, boolean>>({});
-
     const isOwnWall = !viewedUserId || String(viewedUserId) === String(loggedInUserId);
     const targetUserId = viewedUserId ?? loggedInUserId;
+
+    const isAdmin = role === "ADMIN";
 
     useEffect(() => {
         setPage(0);
@@ -137,7 +111,9 @@ const Wall = ({viewedUserId}: WallProps) => {
 
         if (isOwnWall) {
             try {
-                const allRes = await api.get<FriendshipRespondDTO[]>(`/friendship/users/${targetUserId}`);
+                const allRes = await api.get<FriendshipRespondDTO[]>(
+                    `/friendship/users/${targetUserId}`
+                );
                 setFriendshipsAll(allRes.data || []);
             } catch (e: any) {
                 console.error(e);
@@ -214,6 +190,12 @@ const Wall = ({viewedUserId}: WallProps) => {
         return f.sender === wallUserId ? f.receiver : f.sender;
     };
 
+    const getOtherUserDisplayNameFromFriendship = (f: FriendshipRespondDTO) => {
+        const wallUserId = Number(targetUserId);
+        const name = f.sender === wallUserId ? f.receiverDisplayName ?? null : f.senderDisplayName ?? null;
+        return name && name.trim().length > 0 ? name : `User ${getOtherUserIdFromFriendship(f)}`;
+    };
+
     const pendingIncoming = useMemo(() => {
         if (!isOwnWall || !loggedInUserId) return [];
         return friendshipsAll.filter(
@@ -280,96 +262,11 @@ const Wall = ({viewedUserId}: WallProps) => {
         }
     };
 
-    const fetchCommentsForPost = async (postId: string, pageToLoad: number) => {
-        setCommentsLoading((prev) => ({...prev, [postId]: true}));
-        setCommentsError((prev) => ({...prev, [postId]: null}));
-
-        try {
-            const res = await api.get<PageResponse<CommentResponseDTO>>(
-                `/comments/post/${postId}?page=${pageToLoad}&size=10`
-            );
-
-            const incoming = res.data.content ?? [];
-
-            setCommentsByPost((prev) => {
-                const existing = prev[postId] ?? [];
-                const merged = pageToLoad === 0 ? incoming : [...existing, ...incoming];
-                return {...prev, [postId]: merged};
-            });
-
-            setCommentPageByPost((prev) => ({...prev, [postId]: res.data.number}));
-            setCommentTotalPagesByPost((prev) => ({...prev, [postId]: res.data.totalPages ?? 1}));
-            setCommentTotalElementsByPost((prev) => ({...prev, [postId]: res.data.totalElements ?? 0}));
-        } catch (e: any) {
-            console.error(e);
-            setCommentsError((prev) => ({
-                ...prev,
-                [postId]: e?.message ?? "Kunde inte hämta kommentarer",
-            }));
-        } finally {
-            setCommentsLoading((prev) => ({...prev, [postId]: false}));
-        }
+    const canEditOrDeletePost = (post: WallPost) => {
+        if (!loggedInUserId) return false;
+        const isOwner = String(post.userId) === String(loggedInUserId);
+        return isOwner || isAdmin;
     };
-
-    const toggleComments = async (postIdRaw: number | string) => {
-        const postId = String(postIdRaw);
-        const isOpen = !!openComments[postId];
-
-        if (!isOpen) {
-            const alreadyLoaded = !!commentsByPost[postId];
-            if (!alreadyLoaded) {
-                await fetchCommentsForPost(postId, 0);
-            }
-        }
-
-        setOpenComments((prev) => ({...prev, [postId]: !isOpen}));
-    };
-
-    const loadMoreComments = async (postIdRaw: number | string) => {
-        const postId = String(postIdRaw);
-        const currentPage = commentPageByPost[postId] ?? 0;
-        const total = commentTotalPagesByPost[postId] ?? 1;
-        const nextPage = currentPage + 1;
-
-        if (nextPage >= total) return;
-        await fetchCommentsForPost(postId, nextPage);
-    };
-
-    const submitComment = async (postIdRaw: number | string) => {
-        const postId = String(postIdRaw);
-        const text = (newCommentByPost[postId] ?? "").trim();
-        if (!text) return;
-
-        setCommentSubmitting((prev) => ({...prev, [postId]: true}));
-        setCommentsError((prev) => ({...prev, [postId]: null}));
-
-        try {
-            const res = await api.post<CommentResponseDTO>(`/comments?postId=${postId}`, {text});
-            setNewCommentByPost((prev) => ({...prev, [postId]: ""}));
-
-            setCommentsByPost((prev) => {
-                const existing = prev[postId] ?? [];
-                return {...prev, [postId]: [res.data, ...existing]};
-            });
-
-            setCommentTotalElementsByPost((prev) => ({
-                ...prev,
-                [postId]: (prev[postId] ?? 0) + 1,
-            }));
-        } catch (e: any) {
-            console.error(e);
-            setCommentsError((prev) => ({
-                ...prev,
-                [postId]: e?.message ?? "Kunde inte skapa kommentar",
-            }));
-        } finally {
-            setCommentSubmitting((prev) => ({...prev, [postId]: false}));
-        }
-    };
-
-    const getCommentText = (c: CommentResponseDTO) => c.text ?? "";
-    const getCommentUsername = (c: CommentResponseDTO) => c.username ?? "Okänd";
-    const getCommentCreated = (c: CommentResponseDTO) => c.created ?? c.createdAt ?? "";
 
     if (!token) return <p>Du måste vara inloggad.</p>;
     if (!targetUserId) return <p>Laddar profil...</p>;
@@ -391,9 +288,7 @@ const Wall = ({viewedUserId}: WallProps) => {
                     <div style={{marginTop: 8}}>
                         <button
                             onClick={sendFriendRequest}
-                            disabled={
-                                relationshipWithViewedUser === "PENDING" || relationshipWithViewedUser === "ACCEPTED"
-                            }
+                            disabled={relationshipWithViewedUser === "PENDING" || relationshipWithViewedUser === "ACCEPTED"}
                         >
                             {relationshipWithViewedUser === "ACCEPTED"
                                 ? "Ni är vänner"
@@ -417,9 +312,10 @@ const Wall = ({viewedUserId}: WallProps) => {
                     <ul style={{listStyle: "none", paddingLeft: 0}}>
                         {accepted.map((f) => {
                             const otherId = getOtherUserIdFromFriendship(f);
+                            const otherName = getOtherUserDisplayNameFromFriendship(f);
                             return (
                                 <li key={f.id}>
-                                    <Link to={`/wall/${otherId}`}>User {otherId}</Link>
+                                    <Link to={`/wall/${otherId}`}>{otherName}</Link>
                                 </li>
                             );
                         })}
@@ -439,9 +335,10 @@ const Wall = ({viewedUserId}: WallProps) => {
                                 <ul style={{listStyle: "none", paddingLeft: 0}}>
                                     {pendingIncoming.map((f) => {
                                         const otherId = getOtherUserIdFromFriendship(f);
+                                        const otherName = getOtherUserDisplayNameFromFriendship(f);
                                         return (
                                             <li key={f.id} style={{marginBottom: 8}}>
-                                                <Link to={`/wall/${otherId}`}>User {otherId}</Link>{" "}
+                                                <Link to={`/wall/${otherId}`}>{otherName}</Link>{" "}
                                                 <button onClick={() => acceptRequest(f.id)}>Acceptera</button>
                                                 {" "}
                                                 <button onClick={() => rejectRequest(f.id)}>Avvisa</button>
@@ -458,9 +355,10 @@ const Wall = ({viewedUserId}: WallProps) => {
                                 <ul style={{listStyle: "none", paddingLeft: 0}}>
                                     {pendingOutgoing.map((f) => {
                                         const otherId = getOtherUserIdFromFriendship(f);
+                                        const otherName = getOtherUserDisplayNameFromFriendship(f);
                                         return (
                                             <li key={f.id}>
-                                                <Link to={`/wall/${otherId}`}>User {otherId}</Link> (väntar)
+                                                <Link to={`/wall/${otherId}`}>{otherName}</Link> (väntar)
                                             </li>
                                         );
                                     })}
@@ -474,9 +372,10 @@ const Wall = ({viewedUserId}: WallProps) => {
                                 <ul style={{listStyle: "none", paddingLeft: 0}}>
                                     {declined.map((f) => {
                                         const otherId = getOtherUserIdFromFriendship(f);
+                                        const otherName = getOtherUserDisplayNameFromFriendship(f);
                                         return (
                                             <li key={f.id}>
-                                                <Link to={`/wall/${otherId}`}>User {otherId}</Link>
+                                                <Link to={`/wall/${otherId}`}>{otherName}</Link>
                                             </li>
                                         );
                                     })}
@@ -489,11 +388,11 @@ const Wall = ({viewedUserId}: WallProps) => {
 
             {isOwnWall && (
                 <div>
-                    <textarea
-                        value={newPostText}
-                        onChange={(e) => setNewPostText(e.target.value)}
-                        placeholder="Skriv ett nytt inlägg..."
-                    />
+          <textarea
+              value={newPostText}
+              onChange={(e) => setNewPostText(e.target.value)}
+              placeholder="Skriv ett nytt inlägg..."
+          />
                     <button onClick={handleCreatePost}>Publicera</button>
                 </div>
             )}
@@ -502,26 +401,7 @@ const Wall = ({viewedUserId}: WallProps) => {
 
             <ul style={{listStyle: "none", paddingLeft: 0}}>
                 {posts.map((post) => {
-                    const postId = String(post.id);
-                    const isOpen = !!openComments[postId];
-                    const comments = commentsByPost[postId] ?? [];
-                    const isCommentsLoading = !!commentsLoading[postId];
-                    const err = commentsError[postId];
-
-                    const totalElements = commentTotalElementsByPost[postId];
-                    const countLabel =
-                        typeof totalElements === "number"
-                            ? totalElements
-                            : commentsByPost[postId]
-                                ? comments.length
-                                : undefined;
-
-                    const totalCommentPages = commentTotalPagesByPost[postId] ?? 1;
-                    const currentCommentPage = commentPageByPost[postId] ?? 0;
-                    const canLoadMore = currentCommentPage + 1 < totalCommentPages;
-
-                    const draft = newCommentByPost[postId] ?? "";
-                    const isSubmitting = !!commentSubmitting[postId];
+                    const canModerate = canEditOrDeletePost(post);
 
                     return (
                         <li key={post.id}>
@@ -529,89 +409,21 @@ const Wall = ({viewedUserId}: WallProps) => {
                                 <>
                                     <textarea value={editingText} onChange={(e) => setEditingText(e.target.value)}/>
                                     <button onClick={() => handleEditPost(post.id)}>Spara</button>
-                                    <button onClick={() => setEditingPostId(null)}>Avbryt</button>
+                                    <button
+                                        onClick={() => {
+                                            setEditingPostId(null);
+                                            setEditingText("");
+                                        }}
+                                    >
+                                        Avbryt
+                                    </button>
                                 </>
                             ) : (
                                 <>
                                     <p>{post.text}</p>
-                                    <small>
-                                        {new Date(post.created).toLocaleString()} av {user.displayName}
-                                    </small>
+                                    <small>{new Date(post.created).toLocaleString()} av {post.username ?? user.displayName}</small>
 
-                                    <div style={{marginTop: 8}}>
-                                        <button onClick={() => toggleComments(post.id)}>
-                                            {isOpen
-                                                ? "Dölj kommentarer"
-                                                : countLabel === undefined
-                                                    ? "Visa kommentarer"
-                                                    : countLabel === 0
-                                                        ? "Inga kommentarer"
-                                                        : `Visa kommentarer (${countLabel})`}
-                                        </button>
-
-                                        {isOpen && (
-                                            <div style={{marginTop: 8}}>
-                                                <div style={{display: "flex", gap: 8, marginBottom: 8}}>
-                                                    <input
-                                                        value={draft}
-                                                        onChange={(e) =>
-                                                            setNewCommentByPost((prev) => ({
-                                                                ...prev,
-                                                                [postId]: e.target.value,
-                                                            }))
-                                                        }
-                                                        placeholder="Skriv en kommentar..."
-                                                        style={{flex: 1}}
-                                                    />
-                                                    <button
-                                                        onClick={() => submitComment(post.id)}
-                                                        disabled={isSubmitting || !draft.trim()}
-                                                    >
-                                                        {isSubmitting ? "Skickar..." : "Skicka"}
-                                                    </button>
-                                                </div>
-
-                                                {isCommentsLoading && comments.length === 0 &&
-                                                    <p>Laddar kommentarer...</p>}
-                                                {err && <p style={{color: "crimson"}}>{err}</p>}
-
-                                                {comments.length === 0 && !isCommentsLoading && !err && (
-                                                    <p>Inga kommentarer ännu.</p>
-                                                )}
-
-                                                {comments.length > 0 && (
-                                                    <ul style={{paddingLeft: 16}}>
-                                                        {comments.map((c) => {
-                                                            const created = getCommentCreated(c);
-                                                            return (
-                                                                <li key={c.id} style={{marginBottom: 8}}>
-                                                                    <strong>{getCommentUsername(c)}</strong>:{" "}
-                                                                    {getCommentText(c)}
-                                                                    {created ? (
-                                                                        <>
-                                                                            <br/>
-                                                                            <small>{new Date(created).toLocaleString()}</small>
-                                                                        </>
-                                                                    ) : null}
-                                                                </li>
-                                                            );
-                                                        })}
-                                                    </ul>
-                                                )}
-
-                                                {canLoadMore && (
-                                                    <button
-                                                        onClick={() => loadMoreComments(post.id)}
-                                                        disabled={isCommentsLoading}
-                                                    >
-                                                        {isCommentsLoading ? "Laddar..." : "Visa fler"}
-                                                    </button>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {isOwnWall && (
+                                    {canModerate && (
                                         <div>
                                             <button
                                                 onClick={() => {
@@ -636,8 +448,8 @@ const Wall = ({viewedUserId}: WallProps) => {
                     Föregående
                 </button>
                 <span>
-                    Sida {page + 1} av {totalPages}
-                </span>
+          Sida {page + 1} av {totalPages}
+        </span>
                 <button disabled={page + 1 >= totalPages} onClick={() => setPage(page + 1)}>
                     Nästa
                 </button>
