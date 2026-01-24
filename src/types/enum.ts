@@ -39,6 +39,10 @@ export interface PostContent {
 
 export interface PostResponse {
     content: PostContent[];
+    totalPages: number;
+    totalElements: number;
+    size: number;
+    number: number;
 }
 
 export interface DefaultUser {
@@ -61,8 +65,10 @@ export interface SignupProps {
 
 export interface WallPost {
     id: number;
+    userId: number;
     text: string;
     created: string;
+    displayName: string;
 }
 
 export interface User {

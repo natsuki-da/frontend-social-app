@@ -11,35 +11,37 @@ const Feed = () => {
     const [posts, setPosts] = useState<PostContent[]>([]);
     const [loading, setLoading] = useState(true);
 
+    const [page, setPage] = useState(0);
+    const [totalPages, setTotalPages] = useState(1);
+
+    const getAllPosts = async (page: number) => {
+        if (!token || !userId) {
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
+
+        try {
+            const response = await api.get<PostResponse>(`/posts?page=${page}&size=10`);
+            setPosts(response.data.content);
+
+            setTotalPages(response.data.totalPages || 1);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    }
+
 
     useEffect(() => {
         console.log("Feed mounted");
         console.log("token:", token);
         console.log("userId:", userId);
 
-        const getAllPosts = async () => {
-            if (!token || !userId) {
-                setLoading(false);
-                return;
-            }
+        getAllPosts(page);
+    }, [token, userId, page]);
 
-            try {
-                const response = await api.get<PostResponse>("/posts");
-                const postData = response.data.content;
-                setPosts(postData);
-
-                // if (!res.ok) {
-                //   throw new Error("Failed to fetch posts");
-                // }
-            } catch (error) {
-                console.error(error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        getAllPosts();
-    }, [token, userId]);
 
     if (loading) {
         return <p>Laddar inlägg...</p>;
@@ -61,7 +63,6 @@ const Feed = () => {
                             <Link to={`/wall/${post.userId}`}>
                                 {post.username}
                             </Link>
-                            <p>{post.username}</p>
                             <p className="post-text">{post.text}</p>
                             <hr/>
                             <small className="post-date">
@@ -77,10 +78,24 @@ const Feed = () => {
                         </li>
                     ))}
                 </ul>
-            </div>
 
+                <div className="pagination">
+                    <button disabled={page === 0} onClick={() => setPage(page - 1)}>
+                        Föregående
+                    </button>
+                    <span>
+            Sida {page + 1} av {totalPages}
+          </span>
+                    <button
+                        disabled={page + 1 >= totalPages}
+                        onClick={() => setPage(page + 1)}
+                    >
+                        Nästa
+                    </button>
+                </div>
+            </div>
         </S.Container>
-    )
-}
+    );
+};
 
 export default Feed;
