@@ -296,7 +296,12 @@ const Wall = ({viewedUserId}: WallProps) => {
                                                 onClick={async () => {
                                                     const text = newPostText.trim();
                                                     if (!text) return;
-                                                    await api.post("/users/posts", {text});
+                                                    await api.post("/users/posts", {
+                                                        text: newPostText.trim(),
+                                                        created: new Date().toISOString(),
+                                                    });
+
+
                                                     setNewPostText("");
                                                     await loadWall();
                                                 }}
