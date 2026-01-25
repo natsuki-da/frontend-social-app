@@ -1,20 +1,69 @@
-import axios from "axios";
+import axios, {
+    AxiosHeaders,
+    AxiosInstance,
+    AxiosRequestConfig,
+    AxiosResponse,
+    InternalAxiosRequestConfig,
+} from "axios";
 
-const api = axios.create({
-    baseURL: "http://localhost:8080",
-});
+class ApiClient {
+    private client: AxiosInstance;
 
-api.interceptors.request.use((config) => {
-    const token = localStorage.getItem("token");
-    config.headers = config.headers ?? {};
+    constructor() {
+        this.client = axios.create({
+            baseURL: import.meta.env.VITE_API_BASE_URL as string,
+        });
 
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    } else {
-        delete config.headers.Authorization;
+        this.client.interceptors.request.use(this.attachAuthToken);
     }
 
-    return config;
-});
+    private attachAuthToken = (config: InternalAxiosRequestConfig) => {
+        const token = localStorage.getItem("token");
 
-export default api;
+        // In Axios v1, headers is AxiosHeaders-like. Ensure it's an AxiosHeaders instance:
+        if (!(config.headers instanceof AxiosHeaders)) {
+            config.headers = new AxiosHeaders(config.headers);
+        }
+
+        if (token) {
+            config.headers.set("Authorization", `Bearer ${token}`);
+        } else {
+            config.headers.delete("Authorization");
+        }
+
+        return config;
+    };
+
+    // ---- HTTP helpers ----
+    public get<T = any>(
+        url: string,
+        config?: AxiosRequestConfig
+    ): Promise<AxiosResponse<T>> {
+        return this.client.get<T>(url, config);
+    }
+
+    public post<T = any, D = any>(
+        url: string,
+        data?: D,
+        config?: AxiosRequestConfig
+    ): Promise<AxiosResponse<T>> {
+        return this.client.post<T>(url, data, config);
+    }
+
+    public put<T = any, D = any>(
+        url: string,
+        data?: D,
+        config?: AxiosRequestConfig
+    ): Promise<AxiosResponse<T>> {
+        return this.client.put<T>(url, data, config);
+    }
+
+    public delete<T = any>(
+        url: string,
+        config?: AxiosRequestConfig
+    ): Promise<AxiosResponse<T>> {
+        return this.client.delete<T>(url, config);
+    }
+}
+
+export default new ApiClient();
