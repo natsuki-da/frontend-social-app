@@ -1,38 +1,69 @@
-import axios, {AxiosInstance} from "axios";
+import axios, {
+    AxiosHeaders,
+    AxiosInstance,
+    AxiosRequestConfig,
+    AxiosResponse,
+    InternalAxiosRequestConfig,
+} from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
-//const API_BASE_URL = "https://rapid-dorthea-antonstest-9c800e7b.koyeb.app";
+class ApiClient {
+    private client: AxiosInstance;
 
-const api: AxiosInstance = axios.create({
-    baseURL: API_BASE_URL,
-    headers: {
-        "Content-Type": "application/json",
-    },
-});
+    constructor() {
+        this.client = axios.create({
+            baseURL: import.meta.env.VITE_API_BASE_URL as string,
+        });
 
+        this.client.interceptors.request.use(this.attachAuthToken);
+    }
 
-api.interceptors.request.use(
-    (config) => {
-        const token: string | null = localStorage.getItem("token");
-        if (token && config.headers) {
-            config.headers["Authorization"] = `Bearer ${token}`;
+    private attachAuthToken = (config: InternalAxiosRequestConfig) => {
+        const token = localStorage.getItem("token");
+
+        // In Axios v1, headers is AxiosHeaders-like. Ensure it's an AxiosHeaders instance:
+        if (!(config.headers instanceof AxiosHeaders)) {
+            config.headers = new AxiosHeaders(config.headers);
         }
+
+        if (token) {
+            config.headers.set("Authorization", `Bearer ${token}`);
+        } else {
+            config.headers.delete("Authorization");
+        }
+
         return config;
-    },
-    (error) => {
-        return Promise.reject(error);
-    }
-);
+    };
 
-//Error handling interceptor
-api.interceptors.response.use(
-    (response) => response,
-    (error) => {
-        if (error.response?.status === 401) {
-            console.warn("Unauthorized. JWT might be invalid or expired.")
-        }
-        return Promise.reject(error);
+    // ---- HTTP helpers ----
+    public get<T = any>(
+        url: string,
+        config?: AxiosRequestConfig
+    ): Promise<AxiosResponse<T>> {
+        return this.client.get<T>(url, config);
     }
-)
 
-export default api;
+    public post<T = any, D = any>(
+        url: string,
+        data?: D,
+        config?: AxiosRequestConfig
+    ): Promise<AxiosResponse<T>> {
+        return this.client.post<T>(url, data, config);
+    }
+
+    public put<T = any, D = any>(
+        url: string,
+        data?: D,
+        config?: AxiosRequestConfig
+    ): Promise<AxiosResponse<T>> {
+        return this.client.put<T>(url, data, config);
+    }
+
+    public delete<T = any>(
+        url: string,
+        config?: AxiosRequestConfig
+    ): Promise<AxiosResponse<T>> {
+        return this.client.delete<T>(url, config);
+    }
+}
+
+export default new ApiClient();
