@@ -1,11 +1,13 @@
 import {useEffect, useState} from "react";
 import * as S from "./Login.styles"
-import {useNavigate} from "react-router-dom";
+import {useLocation, useNavigate} from "react-router-dom";
 import {Paths,} from "../../types/enum";
 import {useAuth} from "../../context/useAuth";
 
 const Login = () => {
-    const [username, setUsername] = useState<string>("");
+    const location = useLocation();
+    const prefilledUsername = (location.state as any)?.username as string | undefined;
+    const [username, setUsername] = useState<string>(prefilledUsername ?? "");
     const [password, setPassword] = useState<string>("");
     const [error, setError] = useState<string | null>(null);
     const {login, token} = useAuth();
@@ -33,9 +35,11 @@ const Login = () => {
         <S.Container>
             <S.Form onSubmit={handleLogin}>
                 <S.Header>
-                    <h1>Log in</h1>
-                    <S.Line/>
+                    <S.Title>Logga in</S.Title>
+                    <S.Subtitle>Välkommen tillbaka — fortsätt där du slutade.</S.Subtitle>
                 </S.Header>
+
+                {error && <S.ErrorBox role="alert">{error}</S.ErrorBox>}
 
                 <S.Main>
                     <S.FormField>
@@ -58,16 +62,14 @@ const Login = () => {
                 </S.Main>
 
                 <S.Footer>
-                    <S.LoginButton>Log in</S.LoginButton>
-                    <p style={{marginTop: "1rem", textAlign: "center"}}>
+                    <S.LoginButton type="submit">Logga in</S.LoginButton>
+                    <S.Hint>
                         Har du inget konto?{" "}
-                        <button type="button" onClick={() => navigate(Paths.HOME)}>
-                            Registrera dig här
-                        </button>
-                    </p>
+                        <S.InlineButton type="button" onClick={() => navigate(Paths.HOME)}>
+                            Skapa ett här
+                        </S.InlineButton>
+                    </S.Hint>
                 </S.Footer>
-
-                {error && <p style={{color: "red"}}>{error}</p>}
             </S.Form>
         </S.Container>
     );

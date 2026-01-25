@@ -1,37 +1,39 @@
 import styled from "styled-components";
 
 export const Container = styled.div`
+  position: sticky;
+  top: 0;
+  z-index: 50;
   width: 100%;
-  height: 5rem;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 0 7rem 0;
-  background-color: rgb(232, 204, 205, 0.5);;
-  opacity: 70%;
-  position: sticky;
-  top: 0;
+  background: rgba(246, 247, 249, 0.75);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid ${({theme}) => theme.colors.border};
 `;
 
 export const Header = styled.div`
   display: flex;
-  height: 3rem;
-  width: 95%;
+  align-items: center;
   justify-content: space-between;
-  a {
-  text-decoration: none;
-  }
-  `;
+  width: min(1100px, 95%);
+  height: 100%;
+`;
 
   export const Title = styled.div`
-  font-size: 2.5rem;
-  line-height: 3rem;
-  padding: 0 2rem;
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 `;
 
   export const Button = styled.button`
-  border: none;
-  cursor: pointer;
+  border: 1px solid ${({theme}) => theme.colors.border};
+  border-radius: ${({theme}) => theme.radius.md};
+  padding: 0.55rem 0.8rem;
+  background: ${({theme}) => theme.colors.surface};
+  &:hover { transform: translateY(-1px); }
 `;
 
 export const Image = styled.img`
