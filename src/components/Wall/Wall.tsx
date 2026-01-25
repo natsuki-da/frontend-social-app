@@ -104,7 +104,7 @@ const Wall = ({viewedUserId}: WallProps) => {
         if (!window.confirm("Vill du ta bort det här inlägget?")) return;
 
         try {
-            await api.delete(`/posts/${postId}`);
+            await api.delete(`/{userId}/with-posts/${postId}`);
             await fetchPosts();
         } catch (error) {
             console.error(error);
