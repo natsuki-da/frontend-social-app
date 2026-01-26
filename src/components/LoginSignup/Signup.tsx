@@ -20,6 +20,12 @@ const Signup = () => {
         e.preventDefault();
         setError(null);
 
+        const passwordOk = /^(?=.*\d).{5,10}$/.test(password);
+        if (!passwordOk) {
+            setError("Lösenordet måste vara 5–10 tecken och innehålla minst en siffra.");
+            return;
+        }
+
         const userInfo: DefaultUser = {
             username: username.trim(),
             email: email.trim(),
@@ -78,7 +84,10 @@ const Signup = () => {
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
+                            minLength={5}
+                            maxLength={10}
                         />
+                        <S.HelperText>5–10 tecken, minst en siffra</S.HelperText>
                     </S.FormField>
 
                     <S.FormField>
