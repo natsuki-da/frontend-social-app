@@ -12,7 +12,8 @@ function App() {
         <HashRouter>
             <Suspense fallback={<div>Loading...</div>}>
                 <Routes>
-                    <Route path={Paths.HOME} element={<Signup/>}/>
+                    <Route path={Paths.HOME} element={<Login/>}/>
+                    <Route path={Paths.SIGNUP} element={<Signup/>}/>
                     <Route path={Paths.LOGIN} element={<Login/>}/>
                     <Route path={Paths.FEED} element={<Feed/>}/>
 

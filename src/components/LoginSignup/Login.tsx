@@ -65,7 +65,7 @@ const Login = () => {
                     <S.LoginButton type="submit">Logga in</S.LoginButton>
                     <S.Hint>
                         Har du inget konto?{" "}
-                        <S.InlineButton type="button" onClick={() => navigate(Paths.HOME)}>
+                        <S.InlineButton type="button" onClick={() => navigate(Paths.SIGNUP)}>
                             Skapa ett här
                         </S.InlineButton>
                     </S.Hint>
